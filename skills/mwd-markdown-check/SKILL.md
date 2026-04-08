@@ -1,5 +1,5 @@
 ---
-name: markdown-check
+name: mwd-markdown-check
 description: Check and validate Markdown content for proper formatting and structure. Use when the user asks to validate or review Markdown content.
 disable-model-invocation: true
 ---

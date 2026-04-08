@@ -1,5 +1,5 @@
 ---
-name: create-mr-description
+name: mwd-create-mr-description
 description: Create a merge request description based on the provided content.
 disable-model-invocation: true
 ---
@@ -20,12 +20,28 @@ The `create-mr-description` skill is designed to generate a merge request (MR) d
 4. Finally provide user markdown result in code block, based on the template below.
 
 ## Template for MR Description
-```
+```md
 ## Description
 [Provide a brief summary of the changes made in this merge request.]
 
 ### Changes
 [List the key changes made in this merge request, including any new features, bug fixes, or improvements.]
+```
+
+## Example output
+This example output is just for demonstrating how final output should be.
+
+```md
+## Description
+This MR adds support for WiFi enterprise authentication (802.1X EAP) to the Tizen display driver, enabling devices to connect to enterprise networks using PEAP, TLS, and TTLS authentication methods.
+
+### Changes
+- **WiFi Enterprise Authentication (802.1X EAP)**
+- **Phase 2 Authentication:** Added support for Phase 2 authentication methods:
+  - PAP (Password Authentication Protocol)
+  - MSCHAP v2 (Microsoft Challenge Handshake Authentication Protocol version 2)
+  - GTC (Generic Token Card)
+- **Test Coverage:** Added comprehensive unit tests (940+ lines) covering all methods, validation scenarios, and error handling
 ```
 
 ## Notes

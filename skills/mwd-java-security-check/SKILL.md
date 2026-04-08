@@ -1,5 +1,5 @@
 ---
-name: java-security-check
+name: mwd-java-security-check
 description: Review Java code for security vulnerabilities and best practices.
 disable-model-invocation: true
 ---
