@@ -25,9 +25,10 @@ glab auth status
 
 
 ## Skills
-| Name | Description |
-| :---- | :------ |
-| `/mwd-markdown-check [file.md] <language:english>` | Validates the <file>.md, check the grammer and writes tips how to improve readibility. |
-| `/mwd-create-mr-description` | Summarize changes in active branch and creates simple description for merge request. |
-| `/mwd-java-security-check` | Verify whole project for security issues based Java standarts and provide feedback how to fix them. |
-| `/mwd-code-review-local [gitlab-mr-url]` | Perform code review (LOCAL) for selected Gitlab merge request (by url) and provide feedback. |
+| Name                                               | Description                                                                                                                                                |
+|:---------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `/mwd-markdown-check [file.md] <language:english>` | Validates the <file>.md, check the grammer and writes tips how to improve readibility.                                                                     |
+| `/mwd-create-mr-description`                       | Summarize changes in active branch and creates simple description for merge request.                                                                       |
+| `/mwd-java-security-check`                         | Verify whole project for security issues based Java standarts and provide feedback how to fix them.                                                        |
+| `/mwd-code-review-local [gitlab-mr-url]`           | Perform code review (LOCAL) for selected Gitlab merge request (by url) and provide feedback.                                                               |
+| `/mwd-node-security-audit`                         | Comprehensively audit a Node.js project: find vulnerabilities, outdated and deprecated packages, peer dependency conflicts, and Node.js engine mismatches. |
