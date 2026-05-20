@@ -4,8 +4,8 @@ A collection of custom skills for Claude Code — reusable, shareable skill defi
 
 ## Installation
 ```
-cd /to/project/directory
 ln -s ~/<path-to-repo>/claude-skills/skills ~/.claude/skills
+ln -s ~/<path-to-repo>/claude-skills/agents ~/.claude/agents
 ```
 
 ## GitLab CLI (`glab`)
@@ -23,6 +23,12 @@ Verify it works:
 glab auth status
 ```
 
+
+## Agents
+
+| Name             | Description                                                                                          |
+|:-----------------|:-----------------------------------------------------------------------------------------------------|
+| `code-reviewer`  | Reviews GitLab merge requests — code quality, correctness, security, TypeScript standards, test coverage. Uses the `mwd-code-review-local` skill. |
 
 ## Skills
 | Name                                               | Description                                                                                                                                                |
