@@ -37,4 +37,5 @@ glab auth status
 | `/mwd-create-mr-description`                       | Summarize changes in active branch and creates simple description for merge request.                                                                       |
 | `/mwd-java-security-check`                         | Verify whole project for security issues based Java standarts and provide feedback how to fix them.                                                        |
 | `/mwd-code-review-local [gitlab-mr-url]`           | Perform code review (LOCAL) for selected Gitlab merge request (by url) and provide feedback.                                                               |
+| `/mwd-code-review-interactive [gitlab-mr-url]`     | Interactive code review for a GitLab MR — generate feedback, confirm which findings to post, and post approved ones as inline comments (with a collapsible AI-fix prompt) via glab. |
 | `/mwd-node-security-audit`                         | Comprehensively audit a Node.js project: find vulnerabilities, outdated and deprecated packages, peer dependency conflicts, and Node.js engine mismatches. |
