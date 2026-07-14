@@ -198,14 +198,18 @@ List every actionable finding as a numbered chat list so the user can decide wha
 
 #### 4.2 Confirm (batch multi-select)
 
-Ask the user **once** which findings to post — do **not** confirm findings one at a time.
+Ask the user **once** which findings to post — do **not** confirm findings one at a time. Posting is strictly **opt-in**: only findings the user *explicitly selects* are posted.
 
 - Preferred: use the `AskUserQuestion` tool with `multiSelect: true`, one option per finding. Note its limit of **4 options per question** and **4 questions per call** (≈12 findings); group findings across questions when needed.
 - If there are more findings than fit, ask in plain text instead: "Reply with the numbers to post (e.g. `1,3,5`), or `all` / `none`."
 
+**Empty selection or Skip = post nothing.** If the user selects no findings, presses **Skip** / dismisses the prompt, replies `none`, or gives an empty or ambiguous answer, the approved set is **empty**: post **nothing** to GitLab, skip Step 4.3 entirely, and go straight to the chat summary in Step 4.4 (every finding is then "kept in chat"). Never post a finding the user did not explicitly select — do **not** fall back to posting "the important ones", the high-severity ones, or any other default subset. When in doubt, post nothing and ask again.
+
 Findings the user does not select — and any un-anchorable findings — are **not** posted; they go to the chat summary in Step 4.4.
 
 #### 4.3 Post approved findings as inline comments
+
+**Precondition:** run this step only if the user explicitly selected **at least one** finding in Step 4.2. If the approved set is empty (nothing selected, or the user skipped/dismissed), post **nothing** and go straight to Step 4.4. Before posting, state exactly which findings (by number) and how many you are about to post — e.g. "Posting 2 of 5 findings inline: #1, #3" — so the count is visible and never silently exceeds the selection.
 
 Post one comment per approved finding using the GitLab Discussions API. This places the comment on the exact diff line, just like the GitLab UI.
 
