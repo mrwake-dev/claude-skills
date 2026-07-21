@@ -25,17 +25,27 @@ Parse the MR URL to extract the project path and MR IID (e.g., `https://gitlab.c
 GLAB="$(command -v glab || echo /opt/homebrew/bin/glab)"
 [ -x "$GLAB" ] || { echo "Required tool not found or not executable: $GLAB" >&2; exit 1; }
 
-# Fetch MR metadata (title, description, author, labels, etc.)
+# Fetch MR metadata (title, description, author, labels, head pipeline, etc.)
 "$GLAB" mr view <iid> -R <group/namespace/repo> -F json
 
-# Fetch code changes
-"$GLAB" mr diff <iid> -R <group/namespace/repo> --raw
+# Save the diff to a temp file — do NOT dump it straight into context (see "Large MRs")
+"$GLAB" mr diff <iid> -R <group/namespace/repo> --raw > /tmp/mr-<iid>.diff
+wc -l /tmp/mr-<iid>.diff
 
 # Fetch commit history
 "$GLAB" api "projects/<url-encoded-project>/merge_requests/<iid>/commits"
+
+# Fetch existing discussions (re-run awareness — see below; follow pagination if 100+ results)
+"$GLAB" api "projects/<url-encoded-project>/merge_requests/<iid>/discussions?per_page=100"
 ```
 
 **URL-encoding**: Replace `/` with `%2F` in the project path (e.g., `my-group/services/my-service` → `my-group%2Fservices%2Fmy-service`).
+
+**Large MRs**: if the saved diff is under ~2,000 lines, read the temp file whole. Otherwise review it file-by-file: list the boundaries with `grep -n '^diff --git' /tmp/mr-<iid>.diff`, then read one file's slice at a time (Read tool with offset/limit, or `sed -n 'START,ENDp'`). If the diff looks truncated (far fewer files than the MR's `changes_count`), check `GET .../merge_requests/<iid>/changes` for `"overflow": true` and fetch the missing files via the paginated `.../merge_requests/<iid>/diffs?per_page=20&page=N` endpoint. Any file that still could not be reviewed must be named in the Step 4.4 executive summary.
+
+**Re-run awareness**: scan the fetched discussions for note bodies starting with `<!-- mwd-review:` — those are findings posted by a previous run of this skill — and note human-raised threads plus their resolved state. The Step 3 verification pass uses this to avoid re-raising anything already on the MR.
+
+**Pipeline status**: capture `.head_pipeline.status` from the MR JSON (`success`, `failed`, `running`, or absent). It goes into the executive summary; if `failed`, connect it to relevant findings where possible.
 
 Also capture the positioning data now — Step 4 needs it to anchor inline comments:
 
@@ -56,17 +66,18 @@ START_SHA=$(echo "$MR_JSON" | "$JQ" -r '.diff_refs.start_sha')
 PROJECT_ENCODED=$(echo "$MR_JSON" | "$JQ" -r '.references.full' | sed 's/![0-9]*$//' | "$JQ" -Rr '@uri')
 ```
 
-Check the MR description for completeness:
-- Is there a clear description of what changed and why?
-- Is the standard MR template filled in (classification, ClickUp task, checklists)?
-
 ### Step 2: Contextual Analysis
 
-Before reviewing the diff, gather context:
+**Load the review rules.** The checklists live in this skill's `references/` directory (paths relative to this SKILL.md). Read:
 
-1. **Identify the primary language/framework** from file extensions in the diff (`.ts`/`.tsx` → TypeScript/React, `.java` → Java, `.py` → Python, `.go` → Go, etc.) and apply the corresponding language-specific rules from Step 3.
-2. **Read surrounding code** — for any modified file, examine the broader context (imports, class structure, related interfaces/types) to understand existing patterns and conventions in the project.
-3. **Check for broken contracts** — if public APIs, interfaces, or shared types are modified, verify that all consumers are updated accordingly.
+- `references/general.md` — **always** (code quality, correctness, architecture, logging, tests, dependencies, CHANGELOG, security).
+- The language files matching the diff, detected from file extensions: `references/typescript.md` (`.ts` / Node.js), `references/react.md` (`.tsx` / React — read together with typescript.md), `references/java.md`, `references/python.md`, `references/go.md`.
+- `references/device-runtime.md` — when the MR touches code that runs on signage devices (Tizen, webOS, BrightSign, embedded Linux). Triggers: imports from `@signageos/front-applet`/`@signageos/front-display`, `tizen`/`webos`/`brightsign` in paths or configs, a browserslist targeting old Chromium/WebKit, applet or player-runtime directories. When unsure, read it — most MRs in this ecosystem ship to devices.
+
+Then gather context:
+
+1. **Read surrounding code** — for any modified file, examine the broader context (imports, class structure, related interfaces/types) to understand existing patterns and conventions in the project.
+2. **Check for broken contracts** — if public APIs, interfaces, or shared types are modified, verify that all consumers are updated accordingly.
 
 Check the MR description for completeness:
 - Is there a clear description of what changed and why?
@@ -79,106 +90,31 @@ Check the commit history:
 
 ### Step 3: Generate Feedback
 
-Always apply the **General** and **Security** rules regardless of language. Then apply the relevant **language-specific** rules based on the detected language/framework.
-
-#### General (all languages)
-
-- **Code quality and readability**
-  - Hardcoded values that should be configurable (magic numbers, URLs, timeouts)
-  - Dead code or commented-out code that should be removed
-  - Duplicated logic that should be extracted into shared utilities
-  - Naming clarity — do names accurately describe intent?
-- **Correctness**
-  - Does the implementation match the described intent in the MR description?
-  - Are there unhandled edge cases or missing error handling?
-  - Are error messages informative and actionable?
-- **Architecture**
-  - Single-purpose components, proper separation of concerns
-  - No breaking changes to public APIs without versioning or migration path
-  - Environment variables accessed only in entry/config files, not scattered throughout
-- **Logging**
-  - Are important operations logged at appropriate levels?
-  - Is logging too verbose or too sparse?
-  - Are sensitive data (tokens, passwords, PII) excluded from logs?
-- **Tests**
-  - Are new/changed behaviors covered by tests?
-  - Do tests follow AAA pattern (Arrange, Act, Assert)?
-  - Are external dependencies mocked?
-  - Are edge cases and error paths tested?
-- **Dependencies**
-  - Are new dependencies justified and not duplicating existing functionality?
-  - Are dependency versions pinned and free of known vulnerabilities?
-- **CHANGELOG**
-  - Is there an entry under `[Unreleased]` using Keep a Changelog format?
-
-#### Security (all languages)
-
-- No exposed secrets, API keys, tokens, or credentials in code or config files
-- Parameterized queries to prevent SQL/NoSQL injection
-- Input validation at all API boundaries (not just SQL — also path traversal, SSRF, header injection)
-- Authentication and authorization checks — are access controls present and correct?
-- Sensitive data not leaked in logs, error messages, or API responses
-- Deserialization of untrusted data handled safely
-- CORS configuration is restrictive and intentional
-- Rate limiting considered for public-facing endpoints
-
-#### TypeScript / Node.js
-
-- No `any` types; no type assertions (`as`, `<Type>`) — use `zod` schemas or type guards instead
-- Correct naming conventions (camelCase for variables/functions, PascalCase for types/classes, UPPER_SNAKE_CASE for constants)
-- Custom error classes with `Error` postfix
-- Proper async/await usage — no floating promises, proper error propagation
-- Microservices/CQRS/event sourcing patterns followed where applicable
-- Test files use `*.spec.ts` in `test/` directory
-
-#### React / Frontend
-
-- Functional components only; no `FC` type, no `IOwnProps`
-- Named exports only; absolute imports; proper import sorting
-- `useNotification` for notifications, `useTranslation` for i18n
-- No direct DOM manipulation — use refs or state
-- Memoization (`useMemo`, `useCallback`) used appropriately, not excessively
-- Accessibility basics (semantic HTML, alt text, keyboard navigation)
-
-#### Java
-
-- **Null safety** — use `Optional` for return types that may be absent; annotate with `@Nullable`/`@NonNull` where applicable; avoid returning `null` from public methods
-- **Exception handling** — proper use of checked vs. unchecked exceptions; custom exception hierarchy with meaningful messages; no empty catch blocks; no catching `Exception` or `Throwable` generically
-- **Immutability** — prefer `final` fields; use unmodifiable collections (`List.of()`, `Collections.unmodifiableList()`); avoid exposing mutable internal state
-- **Concurrency** — thread safety of shared mutable state; proper use of `synchronized`, `volatile`, or concurrent utilities; watch for race conditions and deadlocks
-- **Resource management** — `try-with-resources` for `AutoCloseable` resources (streams, connections, readers); no resource leaks
-- **Dependency injection** — constructor injection over field injection; avoid `new` for service-layer dependencies
-- **Naming and structure** — follow standard Java conventions (PascalCase classes, camelCase methods, UPPER_SNAKE_CASE constants); one public class per file
-- **Serialization** — safe deserialization practices; avoid `ObjectInputStream` on untrusted data
-- **Logging** — use parameterized logging (`log.info("User {} logged in", userId)`) instead of string concatenation
-
-#### Python
-
-- Type hints on function signatures and return types
-- No mutable default arguments (`def foo(items=[])`)
-- Proper use of context managers (`with` statements) for resource handling
-- Virtual environment and dependency management (requirements pinned)
-- Pythonic patterns — list comprehensions over manual loops where appropriate, `pathlib` over `os.path`
-- Exception handling — specific exceptions, not bare `except:`
-
-#### Go
-
-- Error handling — all errors checked, no ignored return values; use `fmt.Errorf` with `%w` for wrapping
-- Goroutine safety — proper channel usage, no goroutine leaks, context propagation
-- Interface design — small interfaces, accept interfaces return structs
-- Resource cleanup with `defer`
-- Naming follows Go conventions (exported = PascalCase, unexported = camelCase, acronyms uppercase)
+Apply every rule file loaded in Step 2 to the diff.
 
 #### For each finding
 
+Assign a stable ID — `[CRITICAL-n]`, `[HIGH-n]`, `[MED-n]`, `[LOW-n]`, numbered per severity. The **same ID** is used in the Step 4.1 selection list, the posted comment (title and hidden marker), and the Step 4.4 summary, so the user can cross-reference everywhere.
+
 In addition to the review text, capture the data needed to post the finding as an inline comment in Step 4:
 
-- **Diff position** — `old_path` and `new_path` (same value unless the file was renamed), plus the line reference tagged by type, taken from the `glab mr diff` output:
+- **Diff position** — `old_path` and `new_path` (same value unless the file was renamed), plus the line reference tagged by type, taken from the diff:
   - Added line (green `+`) → `new_line` only
   - Removed line (red `-`) → `old_line` only
   - Unchanged context line → both `old_line` and `new_line`
   - If a finding cannot be tied to a specific line in the diff, mark it **un-anchorable** — it goes to the chat summary, not GitLab.
+- **Fix delivery** — decide how the fix ships in the comment:
+  - **GitLab suggestion block** when the entire fix is a replacement of the anchored line or a small contiguous range (≤ ~5 lines) on the **new side** of the diff (`new_line` is set). The author applies it with one click in the GitLab UI.
+  - **AI-fix prompt** for everything else (multi-line rewrites, multi-file changes, dependency bumps, refactors).
+  - **Both** when a mechanical local edit is only part of a wider fix (e.g., swap a literal for an enum via suggestion + bump the dependency via prompt).
 - **AI-fix prompt** — a concrete, self-contained instruction an AI coding agent (Claude Code, Cursor, etc.) could paste and act on directly: which file, the location, the problem, the required fix, the suggested implementation (the same code snippet shown in the chat summary's **Fix:** block), and any constraints. Embed the snippet as plain indented lines — never as a nested triple-backtick fence, which would terminate the prompt's outer fence in Step 4.3 — and label it as suggested (verify imports/APIs against the codebase), since review snippets are written without compiling.
+
+#### Verification pass (mandatory, before presenting)
+
+Findings must survive scrutiny before the user ever sees them:
+
+1. **Re-read the evidence** — for each candidate finding, read the full current file (not just the diff hunk) and, where the claim depends on it, the callers/consumers. Drop findings the wider context already handles (e.g., a "missing null check" validated upstream); downgrade severity where the blast radius is smaller than the hunk suggested.
+2. **Dedupe against the MR** — compare each finding with the discussions fetched in Step 1. If the same issue was already raised — by a previous run of this skill (an `<!-- mwd-review:` marker on the same file and substantively the same issue, even if the line shifted) or by a human reviewer — it is **not a posting candidate**: keep it for the chat summary, marked "already raised", with a link to the existing thread.
 
 Positive "what looks good" notes are review-only — never posting candidates.
 
@@ -188,11 +124,11 @@ Positive "what looks good" notes are review-only — never posting candidates.
 
 #### 4.1 Present findings
 
-List every actionable finding as a numbered chat list so the user can decide what to post. Include the location and a short summary; also show the proposed inline-comment body (or at least its summary) so the user knows exactly what would be posted.
+List every actionable finding in chat using its Step 3 ID so the user can decide what to post. Include the location and a short summary; also show the proposed inline-comment body (or at least its summary) so the user knows exactly what would be posted. Findings marked "already raised" are shown separately and are not selectable.
 
 ```
-1. [HIGH] <title> — src/foo.ts:42 — <one-line summary>
-2. [MED]  <title> — src/bar.ts:10 — <one-line summary>
+[HIGH-1] <title> — src/foo.ts:42 — <one-line summary>
+[MED-1]  <title> — src/bar.ts:10 — <one-line summary>
 ...
 ```
 
@@ -201,25 +137,31 @@ List every actionable finding as a numbered chat list so the user can decide wha
 Ask the user **once** which findings to post — do **not** confirm findings one at a time. Posting is strictly **opt-in**: only findings the user *explicitly selects* are posted.
 
 - Preferred: use the `AskUserQuestion` tool with `multiSelect: true`, one option per finding. Note its limit of **4 options per question** and **4 questions per call** (≈12 findings); group findings across questions when needed.
-- If there are more findings than fit, ask in plain text instead: "Reply with the numbers to post (e.g. `1,3,5`), or `all` / `none`."
+- If there are more findings than fit, ask in plain text instead: "Reply with the IDs to post (e.g. `HIGH-1, MED-2`), or `all` / `none`."
 
 **Empty selection or Skip = post nothing.** If the user selects no findings, presses **Skip** / dismisses the prompt, replies `none`, or gives an empty or ambiguous answer, the approved set is **empty**: post **nothing** to GitLab, skip Step 4.3 entirely, and go straight to the chat summary in Step 4.4 (every finding is then "kept in chat"). Never post a finding the user did not explicitly select — do **not** fall back to posting "the important ones", the high-severity ones, or any other default subset. When in doubt, post nothing and ask again.
 
-Findings the user does not select — and any un-anchorable findings — are **not** posted; they go to the chat summary in Step 4.4.
+Findings the user does not select — and any un-anchorable or already-raised findings — are **not** posted; they go to the chat summary in Step 4.4.
 
 #### 4.3 Post approved findings as inline comments
 
-**Precondition:** run this step only if the user explicitly selected **at least one** finding in Step 4.2. If the approved set is empty (nothing selected, or the user skipped/dismissed), post **nothing** and go straight to Step 4.4. Before posting, state exactly which findings (by number) and how many you are about to post — e.g. "Posting 2 of 5 findings inline: #1, #3" — so the count is visible and never silently exceeds the selection.
+**Precondition:** run this step only if the user explicitly selected **at least one** finding in Step 4.2. If the approved set is empty (nothing selected, or the user skipped/dismissed), post **nothing** and go straight to Step 4.4. Before posting, state exactly which findings (by ID) and how many you are about to post — e.g. "Posting 2 of 5 findings inline: HIGH-1, MED-2" — so the count is visible and never silently exceeds the selection.
 
 Post one comment per approved finding using the GitLab Discussions API. This places the comment on the exact diff line, just like the GitLab UI.
 
-**Comment body format** — the finding (severity, title, **Category**, and what's wrong), then a **collapsible** section (GitLab Flavored Markdown supports `<details>`/`<summary>`) holding a copy-ready AI prompt inside a fenced code block (GitLab renders a one-click copy button on code blocks). The prompt **must include the suggested code fix** — the same snippet used in the chat summary's **Fix:** block — embedded as plain indented lines: a nested triple-backtick fence would terminate the outer `text` fence, break rendering, and truncate what the copy button copies. The trailing `\` after the title line is a hard line break, so **Category** renders directly beneath the title; the blank lines around `<summary>` and before `</details>` are required so the fenced block renders:
+**Comment body format** — the first line is a hidden marker `<!-- mwd-review:<ID>:<file>:<line> -->` followed by a blank line (HTML comments don't render in GitLab; the marker lets future runs recognize and dedupe this finding). Then the finding (severity+ID, title, **Category**, and what's wrong), an optional **suggestion block**, then a **collapsible** section (GitLab Flavored Markdown supports `<details>`/`<summary>`) holding a copy-ready AI prompt inside a fenced code block (GitLab renders a one-click copy button on code blocks). The prompt **must include the suggested code fix** — the same snippet used in the chat summary's **Fix:** block — embedded as plain indented lines: a nested triple-backtick fence would terminate the outer `text` fence, break rendering, and truncate what the copy button copies. The trailing `\` after the title line is a hard line break, so **Category** renders directly beneath the title; the blank lines around `<summary>` and before `</details>` are required so the fenced block renders:
 
 ````markdown
-**[HIGH] <short title>**\
+<!-- mwd-review:HIGH-1:src/foo.ts:42 -->
+
+**[HIGH-1] <short title>**\
 **Category:** <e.g., DoS & Resource Exhaustion>
 
 <what's wrong and why it matters — 1–3 sentences>
+
+```suggestion:-0+0
+<replacement for the anchored line(s) — include ONLY when the fix qualifies per Step 3 "Fix delivery">
+```
 
 <details>
 <summary>🤖 Copy this AI prompt for your agent to fix this issue</summary>
@@ -238,7 +180,14 @@ Constraints: keep changes minimal and consistent with surrounding code; update/a
 </details>
 ````
 
-**Build and post the comment.** The body is multi-line and contains a `<details>` block and a fenced code block, so it **cannot** be written with a plain heredoc straight into a JSON string — literal newlines inside a JSON string are invalid. Build the JSON with `jq -n --arg` so the body is safely escaped (newlines, backticks, quotes), then post with `--input` + `-H "Content-Type: application/json"`.
+**Suggestion block rules** (omit the block entirely when they don't hold):
+
+- Only on comments anchored to the **new side** of the diff (`new_line` set — added or context lines). Suggestions cannot attach to removed lines.
+- `suggestion:-N+M` replaces N lines above through M lines below the anchored line (`-0+0` = just the anchored line). The block content is the complete replacement for that range, with real indentation.
+- The replacement content must never contain a line starting with three backticks.
+- When the suggestion fully covers the fix, the `<details>` AI prompt may be omitted to keep the comment small; keep both when the suggestion is only the local part of a wider fix.
+
+**Build and post the comment.** The body is multi-line and contains a `<details>` block and fenced code blocks, so it **cannot** be written with a plain heredoc straight into a JSON string — literal newlines inside a JSON string are invalid. Build the JSON with `jq -n --arg` so the body is safely escaped (newlines, backticks, quotes), then post with `--input` + `-H "Content-Type: application/json"`.
 
 **CRITICAL**: The `glab api -f` flag does **NOT** support nested objects. You **MUST** use `--input` with a JSON file and `-H "Content-Type: application/json"` to send the nested `position` object. Without this, GitLab silently drops the position and creates a regular comment instead of a diff note. Both `old_path` and `new_path` are **always required** — use the same value if the file was not renamed.
 
@@ -250,12 +199,18 @@ for bin in "$GLAB" "$JQ"; do
   [ -x "$bin" ] || { echo "Required tool not found or not executable: $bin" >&2; exit 1; }
 done
 
-# 1) Assemble the multi-line markdown body (finding + collapsible AI prompt)
+# 1) Assemble the multi-line markdown body (marker + finding + optional suggestion + collapsible AI prompt)
 BODY=$(cat <<'EOF'
-**[HIGH] <short title>**\
+<!-- mwd-review:HIGH-1:src/foo.ts:42 -->
+
+**[HIGH-1] <short title>**\
 **Category:** <e.g., DoS & Resource Exhaustion>
 
 <what's wrong and why it matters>
+
+```suggestion:-0+0
+<replacement line(s) — only when the fix qualifies>
+```
 
 <details>
 <summary>🤖 Copy this AI prompt for your agent to fix this issue</summary>
@@ -283,9 +238,12 @@ EOF
   '{body:$body, position:{position_type:"text", base_sha:$base, head_sha:$head, start_sha:$start, old_path:$op, new_path:$np, new_line:42}}' \
   > /tmp/mr-inline-comment.json
 
-# 3) Post the inline comment
-"$GLAB" api "projects/$PROJECT_ENCODED/merge_requests/<iid>/discussions" \
-  -X POST -H "Content-Type: application/json" --input /tmp/mr-inline-comment.json
+# 3) Post the inline comment and capture the response
+RESPONSE=$("$GLAB" api "projects/$PROJECT_ENCODED/merge_requests/<iid>/discussions" \
+  -X POST -H "Content-Type: application/json" --input /tmp/mr-inline-comment.json)
+
+# 4) Verify + collect the note id for the summary link
+echo "$RESPONSE" | "$JQ" -r '.notes[0] | "type=\(.type) note_id=\(.id)"'
 ````
 
 **Line-type variants** — only the `position` object changes; keep the rest of the `jq` call identical:
@@ -295,19 +253,25 @@ EOF
 - **Unchanged context line**: both — `..., old_line:40, new_line:42`
 - **Renamed files**: set `old_path` (`$op`) to the previous filename and `new_path` (`$np`) to the new one.
 
-**Verify success**: the response must contain `"type": "DiffNote"` and a `"position"` object. If you see `"type": "DiscussionNote"` with no position, the request format was wrong — fix and retry.
+**Verify success**: the response must contain `"type": "DiffNote"` and a `"position"` object. Record each `note_id` — the summary links every posted finding as `<mr-url>#note_<note_id>`. If you see `"type": "DiscussionNote"` with no position, the request format was wrong — fix and retry.
 
-**Clean up** the temp file after all inline comments are posted:
+**Fallback ladder** — when the POST returns 400 (GitLab rejects lines it cannot position) or the verify check fails:
+
+1. Retry with the alternate line-type variant (e.g., you sent `new_line` only for what is actually a context line → send both `old_line` and `new_line`, or vice versa). Double-check the line numbers against the diff hunk header.
+2. Retry as a **file-level comment**: replace the line fields with `position_type:"file"` (keep both paths and all three SHAs) and prepend the intended `file:line` reference to the body text. Drop any suggestion block — suggestions require a line anchor.
+3. If that also fails, do **not** silently post a plain non-inline discussion — the skill promises inline-only. Ask the user whether to post it as a regular MR comment or keep it in chat. In the summary, state which fallback level each posted finding ended up at.
+
+**Clean up** the temp files after all inline comments are posted:
 
 ```bash
-rm -f /tmp/mr-inline-comment.json
+rm -f /tmp/mr-inline-comment.json /tmp/mr-<iid>.diff
 ```
 
 #### 4.4 Final chat summary
 
 Produce the final review summary **in chat only** — do not post it to GitLab. Per the code-review output convention, present it as a single raw, copy-pasteable fenced markdown block (use a 4-backtick outer fence, since the content contains ` ``` ` code blocks). Use the format below; include both what was posted and what was kept in chat.
 
-First, the **finding block** format — used for **every** finding, whether posted or kept:
+First, the **finding block** format — used for **every** finding, whether posted or kept (IDs match Step 4.1):
 
 ### [CRITICAL-1] Title
 - **File:** `path/to/File.ts`, line(s) X-Y
@@ -321,15 +285,15 @@ First, the **finding block** format — used for **every** finding, whether post
 Severity tags: `[CRITICAL-n]`, `[HIGH-n]`, `[MED-n]`, `[LOW-n]` (attack scenario optional for MED/LOW; LOW may be abbreviated). Then lay the summary out as:
 
 ### Executive Summary
-[2-3 sentences: overall assessment, number of critical/high findings, primary areas of concern]
+[2-3 sentences: overall assessment, number of critical/high findings, primary areas of concern. Include the head pipeline status (e.g., "CI: failed") and, for large MRs, name any files that could not be reviewed.]
 
 **Verdict:** [APPROVE | APPROVE WITH COMMENTS | REQUEST CHANGES]
 
 ### Posted inline to GitLab
-Every finding posted as an inline comment, shown **in full** using the finding block format above — not just a one-line list. Add a `**Posted:**` line to each noting the `file:line` where the comment was placed.
+Every finding posted as an inline comment, shown **in full** using the finding block format above — not just a one-line list. Add a `**Posted:**` line to each with the direct link (`<mr-url>#note_<note_id>`) and, if it was not a clean DiffNote, the fallback level used.
 
 ### Kept in chat (not posted)
-Findings the user rejected plus any un-anchorable findings, shown **in full** using the finding block format above.
+Findings the user rejected plus any un-anchorable findings, shown **in full** using the finding block format above. List "already raised" findings here too — one line each with a link to the existing discussion instead of a full block.
 
 ### What looks good
 [Acknowledge good patterns and clean code where appropriate, if any]
