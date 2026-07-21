@@ -178,7 +178,7 @@ In addition to the review text, capture the data needed to post the finding as a
   - Removed line (red `-`) → `old_line` only
   - Unchanged context line → both `old_line` and `new_line`
   - If a finding cannot be tied to a specific line in the diff, mark it **un-anchorable** — it goes to the chat summary, not GitLab.
-- **AI-fix prompt** — a concrete, self-contained instruction an AI coding agent (Claude Code, Cursor, etc.) could paste and act on directly: which file, the location, the problem, the required fix, and any constraints.
+- **AI-fix prompt** — a concrete, self-contained instruction an AI coding agent (Claude Code, Cursor, etc.) could paste and act on directly: which file, the location, the problem, the required fix, the suggested implementation (the same code snippet shown in the chat summary's **Fix:** block), and any constraints. Embed the snippet as plain indented lines — never as a nested triple-backtick fence, which would terminate the prompt's outer fence in Step 4.3 — and label it as suggested (verify imports/APIs against the codebase), since review snippets are written without compiling.
 
 Positive "what looks good" notes are review-only — never posting candidates.
 
@@ -213,7 +213,7 @@ Findings the user does not select — and any un-anchorable findings — are **n
 
 Post one comment per approved finding using the GitLab Discussions API. This places the comment on the exact diff line, just like the GitLab UI.
 
-**Comment body format** — the finding (severity, title, **Category**, and what's wrong), then a **collapsible** section (GitLab Flavored Markdown supports `<details>`/`<summary>`) holding a copy-ready AI prompt inside a fenced code block (GitLab renders a one-click copy button on code blocks). The trailing `\` after the title line is a hard line break, so **Category** renders directly beneath the title; the blank lines around `<summary>` and before `</details>` are required so the fenced block renders:
+**Comment body format** — the finding (severity, title, **Category**, and what's wrong), then a **collapsible** section (GitLab Flavored Markdown supports `<details>`/`<summary>`) holding a copy-ready AI prompt inside a fenced code block (GitLab renders a one-click copy button on code blocks). The prompt **must include the suggested code fix** — the same snippet used in the chat summary's **Fix:** block — embedded as plain indented lines: a nested triple-backtick fence would terminate the outer `text` fence, break rendering, and truncate what the copy button copies. The trailing `\` after the title line is a hard line break, so **Category** renders directly beneath the title; the blank lines around `<summary>` and before `</details>` are required so the fenced block renders:
 
 ````markdown
 **[HIGH] <short title>**\
@@ -228,6 +228,10 @@ Post one comment per approved finding using the GitLab Discussions API. This pla
 Fix a code-review finding in `src/foo.ts` around line 42.
 Problem: <concise description of the issue>.
 Required fix: <concrete, actionable instructions>.
+Suggested implementation (verify imports/APIs against the codebase before applying):
+
+    <the fix snippet from the chat summary's Fix block, as plain indented lines — no backtick fences>
+
 Constraints: keep changes minimal and consistent with surrounding code; update/add tests if applicable.
 ```
 
@@ -260,6 +264,10 @@ BODY=$(cat <<'EOF'
 Fix a code-review finding in `src/foo.ts` around line 42.
 Problem: <concise description>.
 Required fix: <concrete instructions>.
+Suggested implementation (verify imports/APIs against the codebase before applying):
+
+    <fix snippet as plain indented lines — no backtick fences>
+
 Constraints: keep changes minimal and consistent with surrounding code; update/add tests if applicable.
 ```
 
