@@ -9,6 +9,18 @@ Apply these to every MR regardless of language.
 - Duplicated logic that should be extracted into shared utilities
 - Naming clarity — do names accurately describe intent?
 
+## Documentation & comments
+
+**Scope: existing docs only.** These rules validate doc comments that are already there — a function, class, or module *without* a doc comment is **never** a finding. Do not report "missing JSDoc/docstring/Javadoc" issues. Docs must always be correct — an outdated doc comment is worse than none.
+
+- When a diff changes a function's signature, behavior, return value, thrown errors, or defaults, verify the attached doc comment (JSDoc/TSDoc, Javadoc, docstring) still matches — flag updating it as part of the change.
+- `@param` names and count must match the actual parameters (renamed, removed, or added params are the classic drift).
+- `@returns` must match what is actually returned now (e.g., became async, now returns `null` on failure).
+- `@throws` must match errors actually thrown; documented defaults and units (ms vs s, ISO formats) must match the implementation.
+- `@example` blocks must still reflect the current API.
+- Docs that merely restate the name (`/** Gets the user. */ getUser()`) are noise — flag for removal or enrichment with what the code cannot say (why, constraints, side effects).
+- Stale inline comments that no longer describe the adjacent code after a refactor.
+
 ## Correctness
 
 - Does the implementation match the described intent in the MR description?

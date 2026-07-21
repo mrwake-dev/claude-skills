@@ -70,7 +70,7 @@ PROJECT_ENCODED=$(echo "$MR_JSON" | "$JQ" -r '.references.full' | sed 's/![0-9]*
 
 **Load the review rules.** The checklists live in this skill's `references/` directory (paths relative to this SKILL.md). Read:
 
-- `references/general.md` — **always** (code quality, correctness, architecture, logging, tests, dependencies, CHANGELOG, security).
+- `references/general.md` — **always** (code quality, documentation & comment accuracy, correctness, architecture, logging, tests, dependencies, CHANGELOG, security).
 - The language files matching the diff, detected from file extensions: `references/typescript.md` (`.ts` / Node.js), `references/react.md` (`.tsx` / React — read together with typescript.md), `references/java.md`, `references/python.md`, `references/go.md`.
 - `references/device-runtime.md` — when the MR touches code that runs on signage devices (Tizen, webOS, BrightSign, embedded Linux). Triggers: imports from `@signageos/front-applet`/`@signageos/front-display`, `tizen`/`webos`/`brightsign` in paths or configs, a browserslist targeting old Chromium/WebKit, applet or player-runtime directories. When unsure, read it — most MRs in this ecosystem ship to devices.
 
