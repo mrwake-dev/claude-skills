@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+	<meta name="theme-color" content="#13132a" />
+	<title>signageOS Applet</title>
+	<style>
+		:root {
+			--bg: #13132a;
+			--surface-alt: #1e1e3d;
+			--accent: #fdc400;
+			--text: #f4f4f8;
+			--text-muted: #a6a6c8;
+			--border: rgba(255, 255, 255, 0.08);
+			--warn: #f5a623;
+			--error: #ff6b6b;
+
+			--font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+			--font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+		}
+
+		*,
+		*::before,
+		*::after {
+			box-sizing: border-box;
+		}
+
+		html,
+		body {
+			margin: 0;
+			padding: 0;
+		}
+
+		body {
+			min-height: 100vh;
+			background-color: var(--bg);
+			color: var(--text);
+			font-family: var(--font-ui);
+			font-size: 16px;
+			line-height: 1.5;
+			-webkit-font-smoothing: antialiased;
+			text-rendering: optimizeLegibility;
+		}
+
+		.app {
+			display: flex;
+			flex-direction: column;
+			height: 100vh;
+			max-width: 1800px;
+			margin: 0 auto;
+			padding: clamp(1.5rem, 3vw, 3rem);
+			padding-bottom: clamp(2.5rem, 4vw, 4rem);
+			gap: clamp(1.5rem, 3vw, 2.5rem);
+		}
+
+		/* ---------- Header ---------- */
+		.app__header {
+			display: flex;
+			align-items: flex-start;
+			justify-content: space-between;
+			gap: clamp(1.5rem, 4vw, 3rem);
+			flex-wrap: wrap;
+			padding-bottom: clamp(1rem, 2vw, 1.75rem);
+			border-bottom: 1px solid var(--border);
+		}
+
+		.brand {
+			display: flex;
+			align-items: stretch;
+			gap: 1rem;
+			min-width: 0;
+			flex: 1 1 auto;
+		}
+
+		.brand__mark {
+			flex: none;
+			width: 6px;
+			border-radius: 999px;
+			background-color: var(--accent);
+		}
+
+		.brand__text {
+			min-width: 0;
+		}
+
+		.brand__title {
+			margin: 0;
+			font-size: clamp(1.5rem, 3.2vw, 2.5rem);
+			font-weight: 700;
+			letter-spacing: -0.01em;
+		}
+
+		.brand__description {
+			margin: 0.5rem 0 0;
+			max-width: 60ch;
+			font-size: clamp(0.95rem, 1.4vw, 1.15rem);
+			color: var(--text-muted);
+		}
+
+		/* ---------- Device info (top-right) ---------- */
+		.device-info {
+			flex: none;
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: flex-end;
+			gap: clamp(1.25rem, 2.5vw, 2.5rem);
+		}
+
+		.device-info__item {
+			text-align: right;
+		}
+
+		.device-info__label {
+			margin: 0 0 0.35rem;
+			font-size: 0.75rem;
+			font-weight: 600;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			color: var(--accent);
+		}
+
+		.device-info__value {
+			margin: 0;
+			font-size: clamp(1.1rem, 1.8vw, 1.4rem);
+			font-weight: 700;
+			line-height: 1.2;
+			font-variant-numeric: tabular-nums;
+		}
+
+		/* ---------- System log ---------- */
+		.log {
+			display: flex;
+			flex-direction: column;
+			flex: 1 1 auto;
+			min-height: 220px;
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			background-color: var(--surface-alt);
+			overflow: hidden;
+		}
+
+		.log__header {
+			display: flex;
+			align-items: center;
+			gap: 0.6rem;
+			padding: 0.9rem 1.25rem;
+			border-bottom: 1px solid var(--border);
+			font-size: 0.8rem;
+			font-weight: 600;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			color: var(--text-muted);
+		}
+
+		.log__header::before {
+			content: "";
+			width: 0.55rem;
+			height: 0.55rem;
+			border-radius: 50%;
+			background-color: var(--accent);
+		}
+
+		.log__body {
+			flex: 1 1 auto;
+			min-height: 0;
+			margin: 0;
+			padding: 1rem 1.25rem;
+			overflow-y: auto;
+			font-family: var(--font-mono);
+			font-size: 0.9rem;
+			line-height: 1.7;
+			list-style: none;
+		}
+
+		.log__line {
+			display: flex;
+			gap: 0.85rem;
+			white-space: pre-wrap;
+			word-break: break-word;
+		}
+
+		.log__time {
+			flex: none;
+			color: var(--text-muted);
+		}
+
+		.log__message {
+			flex: 1 1 auto;
+			min-width: 0;
+			color: var(--text);
+		}
+
+		.log__message--warn {
+			color: var(--warn);
+		}
+
+		.log__message--error {
+			color: var(--error);
+		}
+	</style>
+</head>
+<body>
+	<div class="app">
+		<header class="app__header">
+			<div class="brand">
+				<span class="brand__mark" aria-hidden="true"></span>
+				<div class="brand__text">
+					<h1 class="brand__title">Applet Title</h1>
+					<p class="brand__description">
+						A short description of what this applet does. Replace this text with
+						your own summary of the content, playback behaviour, or purpose of the
+						applet.
+					</p>
+				</div>
+			</div>
+
+			<div class="device-info" aria-label="Device information">
+				<div class="device-info__item">
+					<p class="device-info__label">Firmware version</p>
+					<p class="device-info__value" id="firmware-version">—</p>
+				</div>
+				<div class="device-info__item">
+					<p class="device-info__label">Model</p>
+					<p class="device-info__value" id="device-model">—</p>
+				</div>
+				<div class="device-info__item">
+					<p class="device-info__label">Type</p>
+					<p class="device-info__value" id="device-type">—</p>
+				</div>
+			</div>
+		</header>
+
+		<section class="log" aria-label="Log">
+			<div class="log__header">Log</div>
+			<ul class="log__body" id="log"></ul>
+		</section>
+	</div>
+
+	<script>
+		(function () {
+			const logEl = document.getElementById('log');
+			const firmwareEl = document.getElementById('firmware-version');
+			const modelEl = document.getElementById('device-model');
+			const typeEl = document.getElementById('device-type');
+			let started = false;
+
+			// Append a timestamped line to the on-screen log.
+			function log(message, level) {
+				const line = document.createElement('li');
+				line.className = 'log__line';
+
+				const time = document.createElement('span');
+				time.className = 'log__time';
+				time.textContent = new Date().toTimeString().slice(0, 8);
+
+				const text = document.createElement('span');
+				text.className = level ? `log__message log__message--${level}` : 'log__message';
+				text.textContent = message;
+
+				line.appendChild(time);
+				line.appendChild(text);
+				logEl.appendChild(line);
+				logEl.scrollTop = logEl.scrollHeight; // keep the newest line in view
+			}
+
+			// Read the device values exposed by the signageOS management API.
+			async function loadDeviceInfo() {
+				log('Reading device information…');
+
+				const firmware = await sos.management.firmware.getVersion();
+				firmwareEl.textContent = firmware;
+				log(`Firmware version: ${firmware}`);
+
+				const model = (await sos.management.supports('MODEL'))
+					? await sos.management.getModel()
+					: 'Not supported';
+				modelEl.textContent = model;
+				log(`Model: ${model}`);
+
+				const type = await sos.management.app.getType();
+				typeEl.textContent = type;
+				log(`Type: ${type}`);
+
+				log('Applet ready.');
+			}
+
+			async function startApplet() {
+				if (started) return;
+				started = true;
+				try {
+					await sos.onReady();
+					log('signageOS API ready.');
+					await loadDeviceInfo();
+				} catch (error) {
+					log(`Error: ${error && error.message ? error.message : error}`, 'error');
+				}
+			}
+
+			log('Applet loaded.');
+
+			// `sos` is a global injected by the signageOS runtime. When the applet
+			// runs outside that runtime (e.g. a browser preview) there is no device
+			// to query, so fall back to placeholder values after a short grace period.
+			if (typeof sos !== 'undefined') {
+				startApplet();
+			} else {
+				window.addEventListener('sos.loaded', startApplet);
+				setTimeout(function () {
+					if (!started) {
+						log('signageOS runtime not detected — preview mode.');
+						firmwareEl.textContent = 'N/A';
+						modelEl.textContent = 'N/A';
+						typeEl.textContent = 'N/A';
+
+						// --- Demo lines to verify log wrapping and levels (safe to remove) ---
+						log('This is a deliberately long informational message used to verify that log lines wrap neatly inside the panel instead of overflowing horizontally or being clipped at the right edge of the container.');
+						log('Storage almost full — 92% of the internal storage unit is in use.', 'warn');
+						log('Error: failed to download https://example.com/media/very/long/path/to/a/large-video-file-that-does-not-exist.mp4 (HTTP 404 Not Found).', 'error');
+					}
+				}, 2000);
+			}
+		})();
+	</script>
+</body>
+</html>
