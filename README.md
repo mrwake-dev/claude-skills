@@ -26,16 +26,25 @@ glab auth status
 
 ## Agents
 
-| Name             | Description                                                                                          |
-|:-----------------|:-----------------------------------------------------------------------------------------------------|
-| `code-reviewer`  | Reviews GitLab merge requests — code quality, correctness, security, TypeScript standards, test coverage. Uses the `mwd-code-review-local` skill. |
+| Name               | Description                                                                                                                                       |
+|:-------------------|:--------------------------------------------------------------------------------------------------------------------------------------------------|
+| `code-explorer`    | Analyzes existing codebase features by tracing execution paths, mapping architecture layers, and documenting dependencies to inform new development. |
+| `code-reviewer`    | Reviews GitLab merge requests — code quality, correctness, security, TypeScript standards, test coverage. Uses the `mwd-code-review-local` skill. |
+| `code-simplifier`  | Simplifies and refines code for clarity, consistency, and maintainability while preserving behavior.                                              |
+| `mirek-hater`      | Joke agent — responds to any mention of Mirek/mireček with funny situations and a little bit of well-deserved hate.                               |
+| `planner`          | Planning specialist for complex features, architectural changes, and refactoring — produces step-by-step implementation plans.                    |
+| `refactor-cleaner` | Dead-code cleanup and consolidation — runs analysis tools (knip, depcheck, ts-prune) to identify unused code and safely removes it.               |
 
 ## Skills
+
 | Name                                               | Description                                                                                                                                                |
 |:---------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `/mwd-markdown-check [file.md] <language:english>` | Validates the <file>.md, check the grammer and writes tips how to improve readibility.                                                                     |
-| `/mwd-create-mr-description`                       | Summarize changes in active branch and creates simple description for merge request.                                                                       |
-| `/mwd-java-security-check`                         | Verify whole project for security issues based Java standarts and provide feedback how to fix them.                                                        |
-| `/mwd-code-review-local [gitlab-mr-url]`           | Perform code review (LOCAL) for selected Gitlab merge request (by url) and provide feedback.                                                               |
-| `/mwd-code-review-interactive [gitlab-mr-url]`     | Interactive code review for a GitLab MR — generate feedback, confirm which findings to post, and post approved ones as inline comments (with a collapsible AI-fix prompt) via glab. |
+| `/mwd-agent-rebase`                                | Rebase a feature branch onto the latest target branch (`origin/master`/`origin/main` by default), resolve mechanical conflicts automatically, force-push, and drive the pipeline back to green. |
+| `/mwd-code-review-interactive [gitlab-mr-url]`     | Interactive code review for a GitLab MR — generate findings, verify each against the full codebase, dedupe against previous runs and existing threads, confirm which to post, and post approved ones as inline diff comments with one-click GitLab suggestion blocks and copy-ready AI-fix prompts (including the fix code). Review checklists live in `references/` per language, including device-runtime rules for Tizen/webOS/BrightSign. |
+| `/mwd-code-review-local [gitlab-mr-url]`           | Perform a code review (local, chat-only) for a selected GitLab merge request (by URL) and provide feedback.                                                 |
+| `/mwd-create-mr-description`                       | Summarize changes on the active branch and create a simple description for the merge request.                                                              |
+| `/mwd-java-security-check`                         | Verify the whole project for security issues based on Java standards and provide feedback on how to fix them.                                              |
+| `/mwd-markdown-check [file.md] <language:english>` | Validate a Markdown file, check the grammar, and write tips on how to improve readability.                                                                 |
 | `/mwd-node-security-audit`                         | Comprehensively audit a Node.js project: find vulnerabilities, outdated and deprecated packages, peer dependency conflicts, and Node.js engine mismatches. |
+| `/signage-cdp`                                     | Debug and develop on signage devices (Tizen, webOS, BrightSign, Android players) live over Chrome DevTools Protocol — inspect DOM, eval JS, screenshot, tail console, record network. |
+| `/sos-applet-redesign`                             | Redesign a signageOS single-file applet onto the shared design system, add an on-screen debug mode, harden reconnect/sync playback, verify on-device via CDP, and generate Marketplace docs. |
