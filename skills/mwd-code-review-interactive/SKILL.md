@@ -68,7 +68,7 @@ PROJECT_ENCODED=$(echo "$MR_JSON" | "$JQ" -r '.references.full' | sed 's/![0-9]*
 
 ### Step 2: Contextual Analysis
 
-**Load the review rules.** The checklists live in this skill's `references/` directory (paths relative to this SKILL.md). Read:
+**Identify the review rules.** The checklists live in this skill's `references/` directory (paths relative to this SKILL.md). Decide the execution mode first (see Step 3): in **inline mode**, read the applicable files yourself now; in **fan-out mode**, only detect which apply — each subagent reads its own rule file(s), so do not load them all into the main context. Applicability:
 
 - `references/general.md` — **always** (code quality, documentation & comment accuracy, correctness, architecture, logging, tests, dependencies, CHANGELOG, security).
 - The language files matching the diff, detected from file extensions: `references/typescript.md` (`.ts` / Node.js), `references/react.md` (`.tsx` / React — read together with typescript.md), `references/java.md`, `references/python.md`, `references/go.md`.
@@ -90,11 +90,63 @@ Check the commit history:
 
 ### Step 3: Generate Feedback
 
-Apply every rule file loaded in Step 2 to the diff.
+#### Execution mode: inline or fan-out
+
+Pick based on the diff size measured in Step 1:
+
+- **Inline** — under ~300 changed lines and ~5 files: review in the main context. Read the rule files identified in Step 2 yourself, apply them all to the diff, and run the full verification pass below. Spawning subagents for a small diff is pure overhead.
+- **Fan-out** — anything larger: launch parallel review subagents (Agent tool, `general-purpose`), **all in a single message** so they run concurrently — one per applicable dimension:
+
+| Dimension                                                         | Rule file(s)                                                                             | When                                 |
+|:------------------------------------------------------------------|:-----------------------------------------------------------------------------------------|:-------------------------------------|
+| Correctness & code quality (incl. tests, dependencies, CHANGELOG) | `references/general.md` except the Security and Documentation sections                   | always                               |
+| Security                                                          | `references/general.md` — Security section                                               | always                               |
+| Documentation & comments                                          | `references/general.md` — Documentation & comments section                               | always                               |
+| Language conventions                                              | the detected `references/typescript.md` / `react.md` / `java.md` / `python.md` / `go.md` | per detected language                |
+| Device runtime                                                    | `references/device-runtime.md`                                                            | when the Step 2 device triggers match |
+
+Subagents **never** interact with the user or with GitLab — no questions, no posting. Everything user-facing — presenting findings (4.1), asking what to post (4.2), posting (4.3), the summary (4.4) — happens **only in the main conversation**, built from the findings the subagents return.
+
+**Each subagent prompt must be self-contained.** Include:
+
+- the temp diff path (`/tmp/mr-<iid>.diff`) — and for very large diffs, which file slices this dimension should read;
+- the absolute path(s) of its rule file(s) — the agent reads and applies **only** those;
+- the repo root, `HEAD_SHA`, and the MR title/description for intent context;
+- the finding-capture rules from "For each finding" below (diff position with line types, fix delivery, AI-fix prompt content rules);
+- the **self-verification requirement**: before returning, re-read the full current file (not just the hunk) and relevant callers for every candidate finding; drop what wider context already handles; downgrade overstated severity;
+- the output contract below.
+
+**Output contract** — each subagent returns **only** a JSON array, no prose and no markdown fences, one object per surviving finding (an empty array means the dimension is clean — a valid result, not a failure):
+
+```json
+[{
+  "severity": "CRITICAL | HIGH | MED | LOW",
+  "title": "short title",
+  "category": "e.g. Security / Documentation / Device Runtime",
+  "old_path": "src/foo.ts",
+  "new_path": "src/foo.ts",
+  "line_type": "added | removed | context",
+  "old_line": null,
+  "new_line": 42,
+  "anchorable": true,
+  "description": "what is wrong and why it matters (1-3 sentences)",
+  "fix_code": "concrete code for the chat summary's Fix block",
+  "suggestion": "replacement line(s) when suggestion-eligible, else null",
+  "suggestion_range": "-0+0",
+  "ai_prompt": "full AI-fix prompt text per the rules below"
+}]
+```
+
+**Main-loop merge (after all subagents return):**
+
+1. Parse each result. A subagent returning unparseable output gets **one** retry; if it still fails, report that dimension as "not reviewed" in the Step 4.4 executive summary — never silently drop it.
+2. **Dedupe across dimensions** — overlapping rules produce near-duplicates: same file + same/adjacent lines + substantively the same issue → merge into one finding, keeping the highest severity and the most complete fix.
+3. **Dedupe against the MR** — existing discussions from Step 1 (previous-run `<!-- mwd-review:` markers, human threads) turn matches into "already raised" (see Verification pass).
+4. Assign the final `[SEV-n]` IDs **only now**, after merging, so numbering is stable across 4.1, the posted comments, and 4.4.
 
 #### For each finding
 
-Assign a stable ID — `[CRITICAL-n]`, `[HIGH-n]`, `[MED-n]`, `[LOW-n]`, numbered per severity. The **same ID** is used in the Step 4.1 selection list, the posted comment (title and hidden marker), and the Step 4.4 summary, so the user can cross-reference everywhere.
+Assign a stable ID — `[CRITICAL-n]`, `[HIGH-n]`, `[MED-n]`, `[LOW-n]`, numbered per severity. The **same ID** is used in the Step 4.1 selection list, the posted comment (title and hidden marker), and the Step 4.4 summary, so the user can cross-reference everywhere. In fan-out mode, subagents do **not** assign IDs — the main loop assigns them after the merge.
 
 In addition to the review text, capture the data needed to post the finding as an inline comment in Step 4:
 
@@ -111,7 +163,7 @@ In addition to the review text, capture the data needed to post the finding as a
 
 #### Verification pass (mandatory, before presenting)
 
-Findings must survive scrutiny before the user ever sees them:
+Findings must survive scrutiny before the user ever sees them. In fan-out mode, item 1 runs inside each subagent (its prompt requires it) and item 2 runs in the main loop during the merge; in inline mode, do both yourself:
 
 1. **Re-read the evidence** — for each candidate finding, read the full current file (not just the diff hunk) and, where the claim depends on it, the callers/consumers. Drop findings the wider context already handles (e.g., a "missing null check" validated upstream); downgrade severity where the blast radius is smaller than the hunk suggested.
 2. **Dedupe against the MR** — compare each finding with the discussions fetched in Step 1. If the same issue was already raised — by a previous run of this skill (an `<!-- mwd-review:` marker on the same file and substantively the same issue, even if the line shifted) or by a human reviewer — it is **not a posting candidate**: keep it for the chat summary, marked "already raised", with a link to the existing thread.
