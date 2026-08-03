@@ -93,11 +93,96 @@ Check the commit history:
 
 ### Step 3: Generate Feedback
 
+#### Mechanical pre-scan (both modes, before any judgement-based review)
+
+A subset of the rules are **absolute prohibitions on constructs that are deterministically greppable**
+— `any` in TypeScript, `FC`, a bare `except:`, `catch (Exception)`. Leaving those to reading is exactly
+how they get missed on a small diff, where a single context juggles every rule file at once. So detect
+them mechanically first, in the **main context**, regardless of execution mode. This costs no context
+budget, so it applies to huge diffs too.
+
+Flatten the saved diff into one `file:new_line:added_text` record per added line — every pattern pass
+then runs against that one file, and each hit already carries the new-side anchor data Step 4 needs:
+
+```bash
+DIFF=/tmp/mr-<iid>.diff                  # or /tmp/pr-<number>.diff
+ADDED="${DIFF%.diff}.added"
+awk '
+  /^diff --git/ || /^index / || /^old mode/ || /^new mode/ { next }
+  /^--- /    { next }
+  /^\+\+\+ / { f = substr($0, 7); next }   # strip "+++ b/"
+  /^@@/      { match($0, /\+[0-9]+/); n = substr($0, RSTART + 1, RLENGTH - 1) + 0; next }
+  /^\\/      { next }                      # "\ No newline at end of file"
+  /^\+/      { print f ":" n ":" substr($0, 2); n++; next }
+  /^-/       { next }
+             { n++ }                       # context line advances the new-side counter
+' "$DIFF" > "$ADDED"
+wc -l "$ADDED"
+```
+
+Then run the passes for the rule files detected in Step 2 — only those:
+
+```bash
+# --- typescript.md ---
+grep -nE '\bany\b' "$ADDED"                                                     # no `any` types
+grep -nE '\bas +[A-Z]|\bas +(const|unknown)\b|[^A-Za-z0-9_.>]<[A-Z][A-Za-z0-9_]*> *[A-Za-z_(]' "$ADDED"   # no type assertions
+                                                                                # (the third alternative is the `<Foo>bar` form; requiring a
+                                                                                # non-identifier before `<` keeps out `useState<Bar>(`, `g<T>(`,
+                                                                                # `Promise<Foo>`, `new Map<String, Foo>()`)
+grep -nE '@ts-(ignore|nocheck)' "$ADDED"                                        # never acceptable
+grep -nE '@ts-expect-error' "$ADDED"                                            # allowed only with a stated reason
+grep -nE 'class +[A-Za-z0-9_]+ +extends +[A-Za-z0-9_]*Error' "$ADDED"            # Error postfix on custom errors
+
+# --- react.md (read together with typescript.md) ---
+grep -nE '\bReact\.FC\b|\bFC<|\bFunctionComponent\b|IOwnProps' "$ADDED"          # no FC type, no IOwnProps
+grep -nE 'export +default' "$ADDED"                                              # named exports only
+grep -nE 'document\.(getElementById|querySelector|createElement|write)|\.innerHTML *=' "$ADDED"  # no direct DOM
+
+# --- python.md ---
+grep -nE 'except *:' "$ADDED"                                                    # no bare except
+grep -nE 'def +[A-Za-z0-9_]+\(.*= *(\[\]|\{\})' "$ADDED"                         # no mutable default args
+
+# --- java.md ---
+grep -nE 'catch *\( *(Exception|Throwable)\b' "$ADDED"                           # no generic catch
+grep -nE 'log[A-Za-z]*\.(trace|debug|info|warn|error) *\(.*\+' "$ADDED"          # parameterized logging only
+
+# --- go.md ---
+grep -nE 'fmt\.Errorf\(' "$ADDED" | grep -v '%w'                                 # wrap with %w
+grep -nE '[^A-Za-z0-9_]_ *:?=' "$ADDED"                                          # ignored return values (note: `^` would
+                                                                                 # never match — every record starts `file:line:`)
+
+# --- device-runtime.md ---
+grep -nE '\?\.|\?\?|\|\|=|&&=|replaceAll\(|\.flat\(|\.flatMap\(|Object\.fromEntries|\bglobalThis\b|\bBigInt\b' "$ADDED"   # syntax vs build target
+grep -nE '\bfetch\(|AbortController|URLSearchParams|IntersectionObserver|ResizeObserver|requestIdleCallback|Promise\.(allSettled|any)|crypto\.subtle' "$ADDED"  # untranspilable runtime APIs
+grep -nE 'setInterval\(|setTimeout\(|addEventListener\(' "$ADDED"                # needs matching teardown
+grep -nE 'gap *:|aspect-ratio|position *: *sticky|inset *:' "$ADDED"             # CSS vs oldest target WebKit
+
+# --- general.md (added lines) ---
+grep -niE '(api[_-]?key|secret|token|password|passwd|credential)[^=:]{0,4}[:=][^=]{8,}' "$ADDED"  # hardcoded secrets
+
+# --- general.md (changed-file list, not line content) ---
+grep -E '^\+\+\+ ' "$DIFF"    # manifest without its lockfile (and vice versa); missing CHANGELOG entry;
+                              # test files outside test/ or not named *.spec.ts
+```
+
+**Every hit must be accounted for.** Hits are candidates, not findings — the patterns favour recall, so
+`\bany\b` also matches `Promise.any(` and the word "any" in comments and strings, and the leak and
+device-runtime passes match plenty of perfectly correct code (a `setTimeout` that *is* cleared, an
+optional chain the build target *does* cover). Triage each hit against its rule file and the
+surrounding code, then either raise it as a finding or record it as dismissed with a one-line reason.
+What is forbidden is a hit that simply disappears — that is the failure this pre-scan exists to
+prevent, and Step 4.4 reports the counts.
+
+Two caveats on the derived positions: `new_line` values come from the awk hunk arithmetic, so confirm a
+hit's line against the diff before it becomes a posted comment; and a removed line whose content starts
+with `-- ` is indistinguishable from a `--- ` file header, so a hit's file attribution is worth a glance
+when it looks wrong.
+
 #### Execution mode: inline or fan-out
 
 Pick based on the diff size measured in Step 1:
 
-- **Inline** — under ~300 changed lines and ~5 files: review in the main context. Read the rule files identified in Step 2 yourself, apply them all to the diff, and run the full verification pass below. Spawning subagents for a small diff is pure overhead.
+- **Inline** — under ~300 changed lines and ~5 files: review in the main context. Spawning subagents for a small diff is pure overhead — but inline mode must still earn the coverage guarantee fan-out gets for free from one-agent-per-dimension, so do **not** review "the diff" as one undifferentiated pass. Walk the **same dimension table** as fan-out (below), one dimension at a time and in that order: read that dimension's rule file, apply **every bullet in it** to the diff, and settle that dimension's outcome before starting the next. A dimension is done only when each of its bullets has been either turned into a finding or consciously cleared. Record the per-dimension outcome as you go — `clean`, a finding count, or `not reviewed` + why — because Step 4.4 has to report it. Then run the full verification pass below.
 - **Fan-out** — anything larger: launch parallel review subagents (Agent tool, `general-purpose`), **all in a single message** so they run concurrently — one per applicable dimension:
 
 | Dimension                                                         | Rule file(s)                                                                             | When                                 |
@@ -113,36 +198,42 @@ Subagents **never** interact with the user or with GitLab/GitHub — no question
 **Each subagent prompt must be self-contained.** Include:
 
 - the temp diff path (`/tmp/mr-<iid>.diff` or `/tmp/pr-<number>.diff`) — and for very large diffs, which file slices this dimension should read;
-- the absolute path(s) of its rule file(s) — the agent reads and applies **only** those;
+- the absolute path(s) of its rule file(s) — the agent reads and applies **only** those, bullet by bullet;
+- the **pre-scan hits for its rule file(s)** as `file:line:text`, which it must each either raise as a finding or explicitly dismiss with a reason — no hit may go unmentioned in its result;
 - the repo root, `HEAD_SHA`, and the change title/description for intent context;
 - the finding-capture rules from "For each finding" below (diff position with line types, fix delivery, AI-fix prompt content rules);
 - the **self-verification requirement**: before returning, re-read the full current file (not just the hunk) and relevant callers for every candidate finding; drop what wider context already handles; downgrade overstated severity;
 - the output contract below.
 
-**Output contract** — each subagent returns **only** a JSON array, no prose and no markdown fences, one object per surviving finding (an empty array means the dimension is clean — a valid result, not a failure):
+**Output contract** — each subagent returns **only** a JSON object, no prose and no markdown fences, with one entry in `findings` per surviving finding (`"findings": []` means the dimension is clean — a valid result, not a failure) and one entry in `prescan_dismissed` per pre-scan hit it decided was not a finding:
 
 ```json
-[{
-  "severity": "CRITICAL | HIGH | MED | LOW",
-  "title": "short title",
-  "category": "e.g. Security / Documentation / Device Runtime",
-  "old_path": "src/foo.ts",
-  "new_path": "src/foo.ts",
-  "line_type": "added | removed | context",
-  "old_line": null,
-  "new_line": 42,
-  "anchorable": true,
-  "description": "what is wrong and why it matters (1-3 sentences)",
-  "fix_code": "concrete code for the chat summary's Fix block",
-  "suggestion": "replacement line(s) when suggestion-eligible, else null",
-  "suggestion_range": "-0+0",
-  "ai_prompt": "full AI-fix prompt text per the rules below"
-}]
+{
+  "findings": [{
+    "severity": "CRITICAL | HIGH | MED | LOW",
+    "title": "short title",
+    "category": "e.g. Security / Documentation / Device Runtime",
+    "old_path": "src/foo.ts",
+    "new_path": "src/foo.ts",
+    "line_type": "added | removed | context",
+    "old_line": null,
+    "new_line": 42,
+    "anchorable": true,
+    "description": "what is wrong and why it matters (1-3 sentences)",
+    "fix_code": "concrete code for the chat summary's Fix block",
+    "suggestion": "replacement line(s) when suggestion-eligible, else null",
+    "suggestion_range": "-0+0",
+    "ai_prompt": "full AI-fix prompt text per the rules below"
+  }],
+  "prescan_dismissed": [
+    { "hit": "src/foo.ts:42:// accepts any shape", "reason": "match is inside a comment" }
+  ]
+}
 ```
 
 **Main-loop merge (after all subagents return):**
 
-1. Parse each result. A subagent returning unparseable output gets **one** retry; if it still fails, report that dimension as "not reviewed" in the Step 4.4 executive summary — never silently drop it.
+1. Parse each result. A subagent returning unparseable output gets **one** retry; if it still fails, report that dimension as "not reviewed" in the Step 4.4 executive summary — never silently drop it. Check that `findings` + `prescan_dismissed` together account for **every** pre-scan hit handed to that dimension; an unaccounted hit is triaged in the main loop rather than dropped.
 2. **Dedupe across dimensions** — overlapping rules produce near-duplicates: same file + same/adjacent lines + substantively the same issue → merge into one finding, keeping the highest severity and the most complete fix.
 3. **Dedupe against the change** — existing inline comments from Step 1 (previous-run `<!-- mwd-review:` markers, human threads) turn matches into "already raised" (see Verification pass).
 4. Assign the final `[SEV-n]` IDs **only now**, after merging, so numbering is stable across 4.1, the posted comments, and 4.4.
@@ -166,10 +257,11 @@ In addition to the review text, capture the data needed to post the finding as a
 
 #### Verification pass (mandatory, before presenting)
 
-Findings must survive scrutiny before the user ever sees them. In fan-out mode, item 1 runs inside each subagent (its prompt requires it) and item 2 runs in the main loop during the merge; in inline mode, do both yourself:
+Findings must survive scrutiny before the user ever sees them. In fan-out mode, item 1 runs inside each subagent (its prompt requires it) and items 2–3 run in the main loop during the merge; in inline mode, do all three yourself:
 
 1. **Re-read the evidence** — for each candidate finding, read the full current file (not just the diff hunk) and, where the claim depends on it, the callers/consumers. Drop findings the wider context already handles (e.g., a "missing null check" validated upstream); downgrade severity where the blast radius is smaller than the hunk suggested.
 2. **Dedupe against the change** — compare each finding with the inline comments fetched in Step 1. If the same issue was already raised — by a previous run of this skill (an `<!-- mwd-review:` marker on the same file and substantively the same issue, even if the line shifted) or by a human reviewer — it is **not a posting candidate**: keep it for the chat summary, marked "already raised", with a link to the existing thread.
+3. **Close out the pre-scan and the dimension list** — every mechanical pre-scan hit is now either a finding or a recorded dismissal with a reason, and every dimension applicable per Step 2 has an outcome (`clean` / n findings / `not reviewed` + why). Resolve any gap here, not by omission: an unreviewed dimension or a vanished hit must reach the Step 4.4 coverage line as such.
 
 Positive "what looks good" notes are review-only — never posting candidates.
 
@@ -299,7 +391,7 @@ downgrade an inline-only finding to a plain comment without asking.
 **Clean up** the temp files after all inline comments are posted (use whichever names Step 1 created):
 
 ```bash
-rm -f /tmp/mr-inline-comment.json /tmp/pr-inline-comment.json /tmp/mr-*.diff /tmp/pr-*.diff
+rm -f /tmp/mr-inline-comment.json /tmp/pr-inline-comment.json /tmp/mr-*.diff /tmp/pr-*.diff /tmp/mr-*.added /tmp/pr-*.added
 ```
 
 #### 4.4 Final chat summary
@@ -323,6 +415,10 @@ Severity tags: `[CRITICAL-n]`, `[HIGH-n]`, `[MED-n]`, `[LOW-n]` (attack scenario
 [2-3 sentences: overall assessment, number of critical/high findings, primary areas of concern. Include the CI status (e.g., "CI: failed") and, for large changes, name any files that could not be reviewed.]
 
 **Verdict:** [APPROVE | APPROVE WITH COMMENTS | REQUEST CHANGES]
+
+**Coverage:** one compact line naming **every** dimension applicable per Step 2, each with `clean`, a finding count, or `not reviewed` + reason — in **both** execution modes, so a small change is auditable exactly like a large one. End it with the pre-scan tally. A dimension that is silently absent is the failure this line exists to prevent.
+
+`Correctness ✓ · Security ✓ · Docs ✓ · TypeScript (2) · Device runtime — not reviewed (subagent failed twice) · pre-scan: 7 hits → 2 raised, 5 dismissed`
 
 ### Posted inline
 Every finding posted as an inline comment, shown **in full** using the finding block format above — not just a one-line list. Add a `**Posted:**` line to each with the direct link (GitLab `<mr-url>#note_<note_id>`, or the GitHub comment `html_url`) and, if it needed a fallback (non-inline anchor), the fallback level used.
