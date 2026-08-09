@@ -1,6 +1,6 @@
 ---
 name: mwd-code-review-interactive
-description: Interactive code review on a GitLab merge request or GitHub pull request — generate feedback, confirm with the user which findings to post, and post approved ones as inline diff comments via glab or gh (auto-detected from the repo URL). Use when the user asks to interactively review an MR/PR and post comments.
+description: Interactive code review on a GitLab merge request or GitHub pull request — generate feedback, confirm with the user which findings to post, post approved ones as inline diff comments via glab or gh (auto-detected from the repo URL), and write an HTML report into a persistent review archive. Use when the user asks to interactively review an MR/PR and post comments.
 argument-hint: "[merge-request-or-pull-request-url]"
 disable-model-invocation: true
 ---
@@ -10,7 +10,8 @@ disable-model-invocation: true
 Perform an **interactive** code review on the merge request / pull request at $ARGUMENTS. Generate
 feedback exactly as a normal review, then confirm with the user which findings to post and post the
 approved ones as **inline diff comments**. Rejected or un-postable findings stay in a final chat
-summary — nothing else is written to the platform.
+summary — nothing else is written to the platform. Every run also writes an HTML report of the whole
+review into a persistent local archive (Step 4.5).
 
 The skill supports **both GitLab (via `glab`) and GitHub (via `gh`)**. The review logic (Steps 2–3)
 is identical on both; only the fetch (Step 1) and post (Step 4.3) plumbing differs, and that lives in
@@ -23,6 +24,12 @@ review.
 a fresh, minimally-initialized shell (no environment shared between blocks), so every block resolves
 tool paths up front via `command -v` with a fallback (`/opt/homebrew/bin/…`, `/usr/bin/jq`) and fails
 fast if a tool is missing. Always call the resolved `"$GLAB"` / `"$GH"` / `"$JQ"` variables.
+
+**Running the helper script:** Step 4.5 invokes `scripts/render-report.js`, which lives next to this
+`SKILL.md` in the skill's installation directory — **not** in the user's project. Resolve
+`SKILL_DIR="$(dirname "<path-to-this-SKILL.md>")"` and call it by absolute path
+(`node "$SKILL_DIR/scripts/render-report.js" …`). If the script "doesn't exist", you are looking in the
+project directory instead of the skill directory.
 
 ### Step 0: Detect the platform
 
@@ -76,6 +83,9 @@ change.
 - `references/general.md` — **always** (code quality, documentation & comment accuracy, correctness, architecture, logging, tests, dependencies, CHANGELOG, security).
 - The language files matching the diff, detected from file extensions: `references/typescript.md` (`.ts` / Node.js), `references/react.md` (`.tsx` / React — read together with typescript.md), `references/java.md`, `references/python.md`, `references/go.md`.
 - `references/device-runtime.md` — when the change touches code that runs on signage devices (Tizen, webOS, BrightSign, embedded Linux). Triggers: imports from `@signageos/front-applet`/`@signageos/front-display`, `tizen`/`webos`/`brightsign` in paths or configs, a browserslist targeting old Chromium/WebKit, applet or player-runtime directories. When unsure, read it — most changes in this ecosystem ship to devices.
+
+`references/platform-gitlab.md`, `references/platform-github.md`, and `references/report.md` are
+plumbing, not checklists — they are read in Steps 0 and 4.4, and never handed to a review subagent.
 
 Then gather context:
 
@@ -388,13 +398,46 @@ record its direct link for the Step 4.4 summary, and if a line cannot be positio
 reference's fallback ladder (alternate anchor → file-level comment → ask the user). Never silently
 downgrade an inline-only finding to a plain comment without asking.
 
-**Clean up** the temp files after all inline comments are posted (use whichever names Step 1 created):
+**Clean up** the diff temp files after all inline comments are posted (use whichever names Step 1
+created). Do this **after** Step 4.4's report payload is written, or simply leave it to the end of the
+run — nothing below needs the diff:
 
 ```bash
-rm -f /tmp/mr-inline-comment.json /tmp/pr-inline-comment.json /tmp/mr-*.diff /tmp/pr-*.diff /tmp/mr-*.added /tmp/pr-*.added
+rm -f /tmp/mr-inline-comment.json /tmp/pr-inline-comment.json /tmp/mr-*.diff /tmp/pr-*.diff /tmp/mr-*.added /tmp/pr-*.added /tmp/mwd-review-report.json
 ```
 
-#### 4.4 Final chat summary
+#### 4.4 HTML report, then the final chat summary
+
+Two outputs close the run, in this order: the **HTML report** (so the summary can link to it), then the
+**chat summary**. Both are local — neither is posted to GitLab/GitHub.
+
+##### 4.4.a Write the HTML report
+
+Every run — including one where the user posted nothing — is recorded in a persistent local archive at
+`~/.claude/code-review-reports/`, so the reports build up into a log of every review this skill has
+ever done. **Read `references/report.md` now** for the full payload schema and the archive layout.
+
+1. Assemble the payload and write it to `/tmp/mwd-review-report.json` **with the Write tool**, not a
+   heredoc — the values contain code, backticks, and newlines.
+2. It must contain **every** finding, not just the posted ones: `status` is `posted` (with
+   `posted_url`), `kept`, or `already_raised` (with `thread_url`). Carry `fix_code` and `ai_prompt`
+   verbatim — the report's copy button is how the user gets the prompt for a finding that was never
+   posted. `coverage` and `prescan` mirror the Coverage line below exactly.
+3. Render it:
+
+```bash
+node "$SKILL_DIR/scripts/render-report.js" /tmp/mwd-review-report.json
+```
+
+The script writes the report, appends it to the archive manifest, regenerates the archive index, and
+prints `REPORT`, `REPORT_URL`, `INDEX`, `INDEX_URL`, `REVIEWS`. Take `REPORT_URL` and `INDEX_URL` into
+the summary below. **Do not open the report in a browser** — print the paths and let the user click, or
+mention that `/mwd-review-report` opens the newest report on demand.
+
+If rendering fails, say so in one line in the summary and carry on; a failed report never blocks the
+review output.
+
+##### 4.4.b Final chat summary
 
 Produce the final review summary **in chat only** — do not post it to GitLab/GitHub. Per the code-review output convention, present it as a single raw, copy-pasteable fenced markdown block (use a 4-backtick outer fence, since the content contains ` ``` ` code blocks). Use the format below; include both what was posted and what was kept in chat.
 
@@ -419,6 +462,9 @@ Severity tags: `[CRITICAL-n]`, `[HIGH-n]`, `[MED-n]`, `[LOW-n]` (attack scenario
 **Coverage:** one compact line naming **every** dimension applicable per Step 2, each with `clean`, a finding count, or `not reviewed` + reason — in **both** execution modes, so a small change is auditable exactly like a large one. End it with the pre-scan tally. A dimension that is silently absent is the failure this line exists to prevent.
 
 `Correctness ✓ · Security ✓ · Docs ✓ · TypeScript (2) · Device runtime — not reviewed (subagent failed twice) · pre-scan: 7 hits → 2 raised, 5 dismissed`
+
+**Report:** the `REPORT_URL` from 4.4.a, plus the `INDEX_URL` for the full archive — e.g.
+`file:///Users/you/.claude/code-review-reports/reports/gitlab.com/group/repo/mr-482-20260809-141203.html` (all reviews: `…/index.html`)
 
 ### Posted inline
 Every finding posted as an inline comment, shown **in full** using the finding block format above — not just a one-line list. Add a `**Posted:**` line to each with the direct link (GitLab `<mr-url>#note_<note_id>`, or the GitHub comment `html_url`) and, if it needed a fallback (non-inline anchor), the fallback level used.
