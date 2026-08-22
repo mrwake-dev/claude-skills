@@ -13,6 +13,14 @@ The `create-mr-description` skill is designed to generate a merge request (MR) d
 - Use this skill when you need to create a merge request description for a branch that has changes that need to be reviewed and merged into the main branch.
 - When user asks to create a merge request description, invoke this skill to analyze the git history and changes in the active branch and generate a well-structured MR description.
 
+## Rules
+- Scope to commits on THIS branch only. Resolve the base ref rather than assuming `master`:
+  `git log --oneline "$(git merge-base HEAD "$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/master)")"..HEAD`
+  Never include base-branch commits. State the base ref you used in your reply.
+- Keep descriptions compact — summary plus bulleted changes, no per-file narration.
+- Hard budget: `## Description` ≤ 3 sentences; `### Changes` ≤ 8 bullets, one line each. If the branch genuinely needs more, group bullets by theme rather than adding depth.
+- No filler: skip motivation essays, skip restating file names, skip test-count brags unless the count is the point.
+
 ## Workflow
 1. Identify the active branch and the target branch for the merge request (e.g., main), use `git` commands to gather information about the commits and changes in the active branch compared to the target branch.
 2. Analyze the git history of the active branch to gather information about the commits, including commit messages, and the files that were changed.
