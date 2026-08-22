@@ -269,7 +269,7 @@ In addition to the review text, capture the data needed to post the finding as a
 
 Findings must survive scrutiny before the user ever sees them. In fan-out mode, item 1 runs inside each subagent (its prompt requires it) and items 2–3 run in the main loop during the merge; in inline mode, do all three yourself:
 
-1. **Re-read the evidence** — for each candidate finding, read the full current file (not just the diff hunk) and, where the claim depends on it, the callers/consumers. Drop findings the wider context already handles (e.g., a "missing null check" validated upstream); downgrade severity where the blast radius is smaller than the hunk suggested.
+1. **Re-read the evidence** — for each candidate finding, read the full current file (not just the diff hunk) and, where the claim depends on it, the callers/consumers. Drop findings the wider context already handles (e.g., a "missing null check" validated upstream); downgrade severity where the blast radius is smaller than the hunk suggested. State, per surviving finding, the one line of evidence that rules out the "already handled upstream" explanation. A finding with no such line is dropped, not downgraded.
 2. **Dedupe against the change** — compare each finding with the inline comments fetched in Step 1. If the same issue was already raised — by a previous run of this skill (an `<!-- mwd-review:` marker on the same file and substantively the same issue, even if the line shifted) or by a human reviewer — it is **not a posting candidate**: keep it for the chat summary, marked "already raised", with a link to the existing thread.
 3. **Close out the pre-scan and the dimension list** — every mechanical pre-scan hit is now either a finding or a recorded dismissal with a reason, and every dimension applicable per Step 2 has an outcome (`clean` / n findings / `not reviewed` + why). Resolve any gap here, not by omission: an unreviewed dimension or a vanished hit must reach the Step 4.4 coverage line as such.
 
@@ -474,3 +474,16 @@ Findings the user rejected plus any un-anchorable findings, shown **in full** us
 
 ### What looks good
 [Acknowledge good patterns and clean code where appropriate, if any]
+
+---
+
+### Step 5: If the user redirects to "fix these locally instead of posting"
+
+This happens on most runs, often mid-way through the Step 4 confirmation. Treat it as a scoped edit
+task, not a licence to improve the file:
+
+- Touch only the lines the finding names. No adjacent refactors, no renames, no new helpers.
+- **Add no JSDoc and no inline comments** unless the finding itself was "missing/wrong docs".
+- One CHANGELOG line per user-visible fix, under 120 characters. Never one per finding.
+- Report as a table: finding → `file:line` → what changed. No per-file narration.
+- Nothing is posted to GitLab/GitHub once the user has redirected — the review stays local.
