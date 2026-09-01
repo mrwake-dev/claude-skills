@@ -1,27 +1,57 @@
 # Claude Skills
 
-A collection of custom skills for Claude Code — reusable, shareable skill definitions that extend Claude Code's capabilities. Skills are defined as Markdown files with structured prompts and workflows, and can be symlinked into `~/.claude/skills` to make them available across projects.
+A collection of custom skills, agents, and slash commands for Claude Code — reusable, shareable definitions that extend Claude Code's capabilities. Each is a Markdown file with a structured prompt and workflow, symlinked into `~/.claude` to make it available across every project.
 
 ## Installation
-```
-ln -s ~/<path-to-repo>/claude-skills/skills ~/.claude/skills
-ln -s ~/<path-to-repo>/claude-skills/agents ~/.claude/agents
-ln -s ~/<path-to-repo>/claude-skills/commands ~/.claude/commands
-```
 
-## GitLab CLI (`glab`)
+Clone the repo, then symlink the three directories into `~/.claude`:
 
-Skills use the `glab` CLI to interact with GitLab (merge requests, code search, comments). No MCP servers are required for GitLab operations.
-
-**Prerequisites**: Install and authenticate `glab`:
 ```sh
-brew install glab
-glab auth login  # authenticate with your GitLab instance
+REPO=~/Documents/develop/mrwake-dev/claude-skills   # wherever you cloned it
+
+ln -s "$REPO/skills"   ~/.claude/skills
+ln -s "$REPO/agents"   ~/.claude/agents
+ln -s "$REPO/commands" ~/.claude/commands
 ```
 
-Verify it works:
+If any of those already exist as real directories, move them aside first — `ln -s` into an existing
+directory silently creates `~/.claude/skills/skills` instead of failing. Check with
+`ls -la ~/.claude | grep -E 'skills|agents|commands'`; each should be a `->` symlink to this repo.
+
+## Prerequisites
+
+No MCP servers are required. The skills shell out to ordinary CLIs:
+
+| Tool      | Needed for                                                                                      | Install                                                                                          |
+|:----------|:------------------------------------------------------------------------------------------------|:-------------------------------------------------------------------------------------------------|
+| `git`     | every git-based skill                                                                            | preinstalled                                                                                       |
+| `node`    | the HTML report renderer, the report opener, and the Node audit scripts                          | [nodejs.org/download](https://nodejs.org/en/download) — or [nvm](https://github.com/nvm-sh/nvm), any current version |
+| `glab`    | all GitLab MR work — fetching, diffing, posting inline comments                                   | `brew install glab`                                                                                |
+| `gh`      | the same on GitHub PRs (`/mwd-code-review-interactive`, `/mwd-resolve-mr-comments` auto-detect)  | `brew install gh`                                                                                  |
+| `jq`      | parsing GitLab/GitHub API responses in both platform reference files                             | `brew install jq`                                                                                  |
+| `docker`  | lockfile regeneration during `/mwd-agent-rebase`                                                  | [Docker Desktop](https://www.docker.com/products/docker-desktop/)                                  |
+| `python3` | the local preview server in `/sos-applet-redesign` only                                           | preinstalled on macOS                                                                              |
+
+The three forge/JSON CLIs install in one go:
+
 ```sh
-glab auth status
+brew install glab gh jq
+```
+
+The report scripts have no npm dependencies, so whatever `node` your version manager already provides
+is fine — there is no need to install a second one through Homebrew.
+
+Authenticate the two forge CLIs once:
+
+```sh
+glab auth login   # your GitLab instance
+gh auth login     # github.com
+```
+
+Verify everything resolves:
+
+```sh
+node --version && glab auth status && gh auth status && jq --version
 ```
 
 
@@ -66,13 +96,14 @@ Reports are never opened automatically — use `/mwd-review-report` when you wan
 
 | Name                                               | Description                                                                                                                                                |
 |:---------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `/mwd-agent-rebase`                                | Rebase a feature branch onto the latest target branch (`origin/master`/`origin/main` by default), resolve mechanical conflicts automatically, force-push, and drive the pipeline back to green. |
+| `/mwd-agent-rebase`                                | Rebase a feature branch onto the latest target branch (`origin/master`/`origin/main` by default), resolve mechanical conflicts automatically (regenerating lockfiles in Docker as a last resort), and force-push with `--force-with-lease`. |
 | `/mwd-code-review-interactive [mr-or-pr-url]`      | Interactive code review for a **GitLab MR (via `glab`) or GitHub PR (via `gh`)** — auto-detected from the repo URL. Generate findings, verify each against the full codebase, dedupe against previous runs and existing threads, confirm which to post, and post approved ones as inline diff comments with one-click suggestion blocks and copy-ready AI-fix prompts (including the fix code). Review checklists live in `references/` per language, including device-runtime rules for Tizen/webOS/BrightSign; platform-specific fetch/post plumbing lives in `references/platform-gitlab.md` and `references/platform-github.md`. On large changes, review dimensions fan out to parallel subagents whose findings are merged in the main thread; small changes are reviewed inline but walk the same dimension list, and a mechanical grep pre-scan for absolute prohibitions (`any`, `FC`, bare `except:`, …) plus a per-dimension coverage line in the summary keep both modes equally auditable. Every run also writes a self-contained HTML report — all findings (posted, rejected, already-raised), fix code, copy-ready AI prompts, coverage and pre-scan audit trail — into the archive at `~/.claude/code-review-reports/`, with an `index.html` logging every review across all projects. |
 | `/mwd-code-review-local [gitlab-mr-url]`           | Perform a code review (local, chat-only) for a selected GitLab merge request (by URL) and provide feedback.                                                 |
 | `/mwd-resolve-mr-comments [mr-or-pr-url]`          | Read every review comment on a **GitLab MR (via `glab`) or GitHub PR (via `gh`)** — auto-detected from the repo URL. Verify each comment against the current code (already-addressed / invalid / non-actionable comments are reported, not applied), confirm which fixes to apply (batch multi-select), and edit the **working tree only**. Never commits, stages, pushes, or writes back to the platform — the user reviews the uncommitted diff. |
 | `/mwd-create-mr-description`                       | Summarize changes on the active branch and create a simple description for the merge request.                                                              |
 | `/mwd-java-security-check`                         | Verify the whole project for security issues based on Java standards and provide feedback on how to fix them.                                              |
 | `/mwd-markdown-check [file.md] <language:english>` | Validate a Markdown file, check the grammar, and write tips on how to improve readability.                                                                 |
+| `/mwd-shorter-jsdocs [--committed \| --uncommitted] [path...]` | Audit the JSDoc blocks this branch added or touched — flag bloated ones to shorten and unnecessary ones to remove, then apply after confirmation. |
 | `/mwd-node-security-audit`                         | Comprehensively audit a Node.js project: find vulnerabilities, outdated and deprecated packages, peer dependency conflicts, and Node.js engine mismatches. |
 | `/signage-cdp`                                     | Debug and develop on signage devices (Tizen, webOS, BrightSign, Android players) live over Chrome DevTools Protocol — inspect DOM, eval JS, screenshot, tail console, record network. |
 | `/sos-applet-redesign`                             | Redesign a signageOS single-file applet onto the shared design system, add an on-screen debug mode, harden reconnect/sync playback, verify on-device via CDP, and generate Marketplace docs. |
