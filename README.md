@@ -109,7 +109,6 @@ use `/mwd-review-report` to reopen one later.
 | Name               | Description                                                                                                                                       |
 |:-------------------|:--------------------------------------------------------------------------------------------------------------------------------------------------|
 | `code-explorer`    | Analyzes existing codebase features by tracing execution paths, mapping architecture layers, and documenting dependencies to inform new development. |
-| `code-reviewer`    | Reviews GitLab merge requests — code quality, correctness, security, TypeScript standards, test coverage. Uses the `mwd-code-review-local` skill. |
 | `code-simplifier`  | Simplifies and refines code for clarity, consistency, and maintainability while preserving behavior.                                              |
 | `mirek-hater`      | Joke agent — responds to any mention of Mirek/mireček with funny situations and a little bit of well-deserved hate.                               |
 | `mwd-review-*`     | Five single-dimension reviewers (`-correctness`, `-security`, `-docs`, `-language`, `-device`) that `/mwd-code-review-interactive` fans out to on large changes. Spawned by the skill, not invoked directly. |
@@ -121,7 +120,6 @@ use `/mwd-review-report` to reopen one later.
 | Name                                                          | Description                                                                                                     |
 |:--------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------|
 | `/mwd-code-review-interactive [mr-or-pr-url]`                 | Review a GitLab MR or GitHub PR, confirm which findings to post, and post them as inline comments — see [Code review](#code-review). |
-| `/mwd-code-review-local [gitlab-mr-url]`                      | Review a GitLab MR in chat only. Nothing is posted back to the platform.                                          |
 | `/mwd-resolve-mr-comments [mr-or-pr-url]`                     | Check every review comment against the current code, then apply the fixes you pick — working tree only, never commits or pushes. |
 | `/mwd-create-mr-description`                                  | Summarize the active branch's changes into a merge request description.                                           |
 | `/mwd-agent-rebase`                                           | Rebase a branch onto its target, resolve mechanical conflicts, and force-push with `--force-with-lease`.           |
