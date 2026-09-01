@@ -29,7 +29,6 @@ No MCP servers are required. The skills shell out to ordinary CLIs:
 | `glab`    | all GitLab MR work — fetching, diffing, posting inline comments                                   | `brew install glab`                                                                                |
 | `gh`      | the same on GitHub PRs (`/mwd-code-review-interactive`, `/mwd-resolve-mr-comments` auto-detect)  | `brew install gh`                                                                                  |
 | `jq`      | parsing GitLab/GitHub API responses in both platform reference files                             | `brew install jq`                                                                                  |
-| `docker`  | lockfile regeneration during `/mwd-agent-rebase`                                                  | [Docker Desktop](https://www.docker.com/products/docker-desktop/)                                  |
 | `python3` | the local preview server in `/sos-applet-redesign` only                                           | preinstalled on macOS                                                                              |
 
 The three forge/JSON CLIs install in one go:
@@ -122,7 +121,7 @@ use `/mwd-review-report` to reopen one later.
 | `/mwd-code-review-interactive [mr-or-pr-url]`                 | Review a GitLab MR or GitHub PR, confirm which findings to post, and post them as inline comments — see [Code review](#code-review). |
 | `/mwd-resolve-mr-comments [mr-or-pr-url]`                     | Check every review comment against the current code, then apply the fixes you pick — working tree only, never commits or pushes. |
 | `/mwd-create-mr-description`                                  | Summarize the active branch's changes into a merge request description.                                           |
-| `/mwd-agent-rebase`                                           | Rebase a branch onto its target, resolve mechanical conflicts, and force-push with `--force-with-lease`.           |
+| `/mwd-agent-rebase [target-branch] [--push] [--ci]`           | Rebase a branch onto its target, resolve mechanical conflicts, and verify with the project's own build. Force-push and pipeline watching are opt-in. |
 | `/mwd-shorter-jsdocs [--committed \| --uncommitted] [path...]` | Trim the JSDoc this branch touched — shorten the bloated blocks, drop the unnecessary ones.                       |
 | `/mwd-markdown-check [file.md] <language:english>`            | Check a Markdown file's grammar and readability.                                                                  |
 | `/mwd-node-security-audit`                                    | Audit a Node.js project for vulnerabilities, outdated and deprecated packages, and engine mismatches.             |
