@@ -98,7 +98,9 @@ optional and its section is skipped when absent. Unknown keys are ignored, so ex
       "thread_url": "https://…#note_1200001",   // status "already_raised": the existing thread
       "fallback": "file-level comment",   // only when the inline anchor needed a fallback
       "description": "What is wrong and why it matters.",
-      "suggestion": "…",                  // the suggestion block content, when one was posted
+      "suggestion": "…",                  // the suggestion posted to the platform; not rendered as its
+                                          // own block — it only labels the Fix block, and stands in
+                                          // for fix_code when that is absent
       "fix_code": "…",                    // concrete code showing the fix — chat only shows it on request
       "ai_prompt": "…"                    // the full AI-fix prompt, verbatim
     }
@@ -119,12 +121,23 @@ optional and its section is skipped when absent. Unknown keys are ignored, so ex
   the same failure that line exists to prevent.
 - Newlines and backticks in code and prompts need no escaping beyond normal JSON; the renderer
   HTML-escapes everything.
+- **Prose fields render inline markdown** — `executive_summary`, `description`, finding `title`,
+  `category`, `good[]`, coverage `note`, and dismissed `reason` support `` `code` ``, `**bold**`,
+  `_italic_`, `[text](https://…)`, and blank-line paragraphs. Write them as you would in chat; the
+  renderer escapes first and only then applies markdown, so no field can inject HTML. Fields not on
+  that list (`file`, `line`, `fallback` values, code blocks) are escaped verbatim.
 
 ## What the page contains
 
-Header (project, change link, verdict, author, CI, branch, SHA, mode, labels, executive summary) ·
+A sticky top bar — back to the index, project/change breadcrumb, findings search, a direct **Open
+MR/PR** link (needs `url`), and a light/dark/auto theme toggle persisted in `localStorage` — then the
+header (project, change link, verdict, author, CI, branch, SHA, mode, labels, executive summary) ·
 severity/posted/size stat cards · coverage pills · severity filter · findings grouped into **Posted
-inline** / **Kept in chat** / **Already raised**, each with description, suggestion, fix code, and a
+inline** / **Kept in chat** / **Already raised**, each with description, **one** fix block, and a
 collapsible AI prompt with a copy button · pre-scan tally with the dismissed-hits table · files not
-reviewed · what looks good. Light and dark are both supported via `prefers-color-scheme`, and the page
-prints cleanly with no external assets.
+reviewed. "What looks good" sits in the header under the executive summary. Code blocks have their
+common indentation stripped, so a suggestion carrying the file's own leading tabs still reads flush.
+Search and the severity filters compose — a finding shows only when it
+passes both. The index carries the same bar with its own search over project, title, author and
+verdict. Theme defaults to `prefers-color-scheme` until the toggle pins one, and the page prints
+cleanly with no external assets.

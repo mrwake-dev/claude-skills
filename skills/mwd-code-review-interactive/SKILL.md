@@ -431,9 +431,15 @@ node "$SKILL_DIR/scripts/render-report.js" /tmp/mwd-review-report.json
 ```
 
 The script writes the report, appends it to the archive manifest, regenerates the archive index, and
-prints `REPORT`, `REPORT_URL`, `INDEX`, `INDEX_URL`, `REVIEWS`. Take `REPORT_URL` and `INDEX_URL` into
-the summary below. **Do not open the report in a browser** — print the paths and let the user click, or
-mention that `/mwd-review-report` opens the newest report on demand.
+prints `REPORT`, `REPORT_URL`, `INDEX`, `INDEX_URL`, `REVIEWS`.
+
+**Always print `REPORT_URL` verbatim in the summary below — every run, without exception.** It is a
+clickable `file://` link to that run's own report, and it is the only place the full findings live now
+that the chat summary is a table. Never replace it with a pointer to `/mwd-review-report`, never
+paraphrase it as "the report was written to the archive", and never leave the user to go looking for
+it. Mentioning that `/mwd-review-report` reopens the newest report is fine **in addition to** the
+link, never instead of it. **Do not open the report in a browser** — print the link and let the user
+click.
 
 If rendering fails, say so in one line in the summary and carry on; a failed report never blocks the
 review output.
@@ -460,7 +466,8 @@ comment or a report entry to match the style below. Layout:
 
 `Correctness ✓ · Security ✓ · Docs ✓ · TypeScript (2) · Device runtime — not reviewed (subagent failed twice) · pre-scan: 7 hits → 2 raised, 5 dismissed`
 
-**Report:** the `REPORT_URL` from 4.4.a, plus the `INDEX_URL` for the full archive — e.g.
+**Report:** the `REPORT_URL` from 4.4.a **in full and unabbreviated** — this line is mandatory on every
+run — plus the `INDEX_URL` for the full archive:
 `file:///Users/you/.claude/code-review-reports/reports/gitlab.com/group/repo/mr-482-20260809-141203.html` (all reviews: `…/index.html`)
 
 ### Posted inline (n)

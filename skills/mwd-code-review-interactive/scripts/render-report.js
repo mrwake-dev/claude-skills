@@ -45,6 +45,40 @@ function esc(value) {
 		.replace(/'/g, '&#39;');
 }
 
+/**
+ * Review prose is written as markdown, so render the inline subset it actually
+ * uses. Code spans are split out first and only escaped, so markdown characters
+ * inside `foo.bar(**x**)` stay literal; everything else is escaped before any
+ * tag is introduced, which keeps this injection-safe.
+ */
+function mdInline(value) {
+	return String(value === null || value === undefined ? '' : value)
+		.split(/(`[^`\n]+`)/)
+		.map((part) => {
+			if (part.length > 1 && part.startsWith('`') && part.endsWith('`')) {
+				return `<code>${esc(part.slice(1, -1))}</code>`;
+			}
+			return esc(part)
+				.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+				.replace(/(^|[\s(])_([^_\n]+)_(?=$|[\s).,;:])/g, '$1<em>$2</em>')
+				.replace(
+					/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g,
+					'<a href="$2" target="_blank" rel="noreferrer">$1</a>',
+				);
+		})
+		.join('');
+}
+
+/** Same, plus paragraph and line breaks — for multi-sentence prose fields. */
+function mdBlock(value) {
+	const text = String(value === null || value === undefined ? '' : value).trim();
+	if (!text) return '';
+	return text
+		.split(/\n{2,}/)
+		.map((para) => `<p>${mdInline(para).replace(/\n/g, '<br>')}</p>`)
+		.join('');
+}
+
 function fail(message) {
 	process.stderr.write(`render-report: ${message}\n`);
 	process.exit(1);
@@ -80,7 +114,7 @@ function formatDateTime(iso) {
 	const d = new Date(iso);
 	if (Number.isNaN(d.getTime())) return String(iso || '');
 	const p = (n) => String(n).padStart(2, '0');
-	return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+	return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 function readJson(file, fallback) {
@@ -89,6 +123,26 @@ function readJson(file, fallback) {
 	} catch {
 		return fallback;
 	}
+}
+
+/**
+ * Drop the indentation every line shares, keeping relative indentation intact.
+ * A suggestion block carries the file's own leading tabs because the platform
+ * replaces whole lines; that offset is noise once it is just code on a page.
+ */
+function stripIndent(value) {
+	const lines = String(value === null || value === undefined ? '' : value).replace(/\s+$/, '').split('\n');
+	const indents = lines.filter((l) => l.trim()).map((l) => l.match(/^[ \t]*/)[0]);
+	if (!indents.length) return lines.join('\n');
+
+	let prefix = indents[0];
+	for (const indent of indents) {
+		let i = 0;
+		while (i < prefix.length && i < indent.length && prefix[i] === indent[i]) i += 1;
+		prefix = prefix.slice(0, i);
+		if (!prefix) return lines.join('\n');
+	}
+	return lines.map((l) => (l.startsWith(prefix) ? l.slice(prefix.length) : l.trimStart())).join('\n');
 }
 
 function verdictClass(verdict) {
@@ -109,6 +163,17 @@ function ciClass(status) {
 
 /* -------------------------------------------------------------- shared css */
 
+const DARK_VARS = `
+  --bg: #0e1015; --surface: #161922; --surface-2: #1b1f2a; --text: #e6e9f0;
+  --muted: #98a1b4; --border: #262c39; --accent: #8b87f7; --accent-soft: #23213c;
+  --ok: #4ade80; --ok-soft: #16281d; --warn: #fbbf24; --warn-soft: #2b2312;
+  --reject: #f87171; --reject-soft: #2d1718; --neutral-soft: #1e222c;
+  --crit: #f87171; --crit-soft: #2d1718; --high: #fb923c; --high-soft: #2c1d12;
+  --med: #fbbf24; --med-soft: #2b2312; --low: #38bdf8; --low-soft: #10222c;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -14px rgba(0,0,0,.8);
+  --nav-bg: rgba(22,25,34,.86);
+`;
+
 const CSS = `
 :root {
   color-scheme: light dark;
@@ -119,19 +184,15 @@ const CSS = `
   --crit: #b91c1c; --crit-soft: #fdeaea; --high: #c2410c; --high-soft: #fdeee4;
   --med: #a16207; --med-soft: #fbf3de; --low: #0e7490; --low-soft: #e4f4f8;
   --shadow: 0 1px 2px rgba(16,20,32,.05), 0 6px 20px -12px rgba(16,20,32,.28);
+  --nav-bg: rgba(255,255,255,.86);
   --radius: 12px; --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0e1015; --surface: #161922; --surface-2: #1b1f2a; --text: #e6e9f0;
-    --muted: #98a1b4; --border: #262c39; --accent: #8b87f7; --accent-soft: #23213c;
-    --ok: #4ade80; --ok-soft: #16281d; --warn: #fbbf24; --warn-soft: #2b2312;
-    --reject: #f87171; --reject-soft: #2d1718; --neutral-soft: #1e222c;
-    --crit: #f87171; --crit-soft: #2d1718; --high: #fb923c; --high-soft: #2c1d12;
-    --med: #fbbf24; --med-soft: #2b2312; --low: #38bdf8; --low-soft: #10222c;
-    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -14px rgba(0,0,0,.8);
-  }
-}
+/* Auto follows the OS unless the toggle has pinned a theme; the explicit
+   selector then wins for a pinned dark. */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {${DARK_VARS}} }
+:root[data-theme="dark"] {${DARK_VARS}}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 * { box-sizing: border-box; }
 body {
   margin: 0; background: var(--bg); color: var(--text); line-height: 1.55;
@@ -151,10 +212,19 @@ h2 { font-size: 15px; margin: 34px 0 12px; text-transform: uppercase;
 h3 { font-size: 16px; margin: 0; letter-spacing: -.01em; }
 p { margin: 0 0 10px; }
 code, pre, .mono { font-family: var(--mono); }
+/* Pills share the button/input corner radius — a full 999px capsule reads as a
+   different design language next to the cards. */
 .pill {
   display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
-  border-radius: 999px; font-size: 12px; font-weight: 650; letter-spacing: .02em;
+  border-radius: 8px; font-size: 12px; font-weight: 650; letter-spacing: .02em;
   background: var(--neutral-soft); color: var(--muted); white-space: nowrap;
+  border: 1px solid var(--border);
+}
+/* Tinted pills outline themselves in their own hue; the var(--border) above is
+   the fallback wherever color-mix() is unavailable. */
+.pill.ok, .pill.warn, .pill.reject, .pill.accent, .pill.posted,
+.pill.sev-CRITICAL, .pill.sev-HIGH, .pill.sev-MED, .pill.sev-LOW {
+  border-color: color-mix(in srgb, currentColor 32%, transparent);
 }
 .pill.ok { background: var(--ok-soft); color: var(--ok); }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
@@ -178,12 +248,87 @@ button {
 button:hover { border-color: var(--accent); color: var(--accent); }
 details > summary { cursor: pointer; list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
+:not(pre) > code {
+  background: var(--neutral-soft); border-radius: 5px; padding: 1px 5px;
+  font-size: .89em; overflow-wrap: anywhere;
+}
+input[type=search] {
+  font: inherit; padding: 7px 12px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+}
+input[type=search]:focus { outline: none; border-color: var(--accent); }
+
+/* top navigation ------------------------------------------------------- */
+.nav {
+  position: sticky; top: 0; z-index: 30; background: var(--nav-bg);
+  border-bottom: 1px solid var(--border); backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+}
+.nav-in {
+  max-width: 1240px; margin: 0 auto; padding: 10px 24px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.nav a { color: var(--text); }
+.nav-home { font-weight: 650; font-size: 13.5px; white-space: nowrap; }
+.nav-home:hover { color: var(--accent); text-decoration: none; }
+.nav-crumb {
+  font-size: 12.5px; color: var(--muted); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.nav-right input[type=search] { width: 260px; max-width: 42vw; padding: 6px 11px; font-size: 13px; }
+.nav-btn {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600;
+  padding: 6px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
+  color: var(--text); white-space: nowrap;
+}
+.nav-btn:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+@media (max-width: 620px) {
+  .nav-crumb { display: none; }
+  .nav-right input[type=search] { width: 100%; max-width: none; order: 3; }
+}
 @media print {
   body { background: #fff; } .card { box-shadow: none; }
   details[open] > summary ~ * { display: revert; } details { break-inside: avoid; }
-  .no-print { display: none !important; }
+  .no-print, .nav { display: none !important; }
 }
 `;
+
+/** Applied before first paint so a pinned theme never flashes the other one. */
+const THEME_BOOT = `<script>(function(){try{var t=localStorage.getItem('mwd-review-theme');
+if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();</script>`;
+
+const THEME_SCRIPT = `
+var THEMES = ['auto', 'light', 'dark'];
+var THEME_LABEL = { auto: '\\u25D0 Auto', light: '\\u2600\\uFE0E Light', dark: '\\u263E\\uFE0E Dark' };
+var themeBtn = document.getElementById('theme');
+function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'auto'; }
+function paintTheme() { if (themeBtn) themeBtn.textContent = THEME_LABEL[currentTheme()]; }
+if (themeBtn) {
+  paintTheme();
+  themeBtn.addEventListener('click', function () {
+    var next = THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length];
+    if (next === 'auto') { document.documentElement.removeAttribute('data-theme'); }
+    else { document.documentElement.setAttribute('data-theme', next); }
+    try { if (next === 'auto') { localStorage.removeItem('mwd-review-theme'); }
+      else { localStorage.setItem('mwd-review-theme', next); } } catch (e) {}
+    paintTheme();
+  });
+}
+`;
+
+/** Shared sticky bar. `home` is null on the index itself, which is the home. */
+function renderNav(home, crumbHtml, actionsHtml) {
+	return `<nav class="nav no-print"><div class="nav-in">
+  ${
+		home
+			? `<a class="nav-home" href="${esc(home)}">&#8592; All reviews</a>`
+			: '<span class="nav-home">Code review archive</span>'
+	}
+  ${crumbHtml ? `<span class="nav-crumb">${crumbHtml}</span>` : ''}
+  <span class="nav-right">${actionsHtml || ''}<button type="button" class="nav-btn" id="theme">&#9680; Auto</button></span>
+</div></nav>`;
+}
 
 /* ------------------------------------------------------------ report page */
 
@@ -209,42 +354,50 @@ function renderFinding(finding) {
 			? `<a class="pill posted" href="${esc(finding.posted_url)}" target="_blank" rel="noreferrer">${esc(STATUSES[status].label)} &#8599;</a>`
 			: `<span class="pill ${status === 'posted' ? 'ok' : ''}">${esc(STATUSES[status].label)}</span>`;
 
-	const fix = finding.fix_code
-		? `<div class="block"><div class="block-h">Fix</div><pre><code>${esc(finding.fix_code)}</code></pre></div>`
+	// One fix block per finding. `suggestion` is the same fix rewritten for the
+	// platform's one-click apply, so rendering it too is duplication on a page
+	// that cannot apply anything; it is only the fallback when there is no
+	// fix_code, and otherwise just earns a note on the label.
+	const fixCode = finding.fix_code || finding.suggestion;
+	const fix = fixCode
+		? `<div class="block"><div class="block-h">Fix${
+				finding.suggestion ? ' &middot; posted as an inline suggestion' : ''
+			}</div><pre><code>${esc(stripIndent(fixCode))}</code></pre></div>`
 		: '';
 
 	const prompt = finding.ai_prompt
 		? `<details class="block toggle prompt"><summary><span class="chev">&#9656;</span> AI fix prompt` +
 			`<button class="copy no-print" type="button">Copy</button></summary>` +
-			`<pre><code>${esc(finding.ai_prompt)}</code></pre></details>`
-		: '';
-
-	const suggestion = finding.suggestion
-		? `<div class="block"><div class="block-h">Inline suggestion</div><pre><code>${esc(finding.suggestion)}</code></pre></div>`
+			`<pre><code>${esc(stripIndent(finding.ai_prompt))}</code></pre></details>`
 		: '';
 
 	const fallback = finding.fallback
-		? `<p class="small muted">Anchor fallback used: ${esc(finding.fallback)}</p>`
+		? `<p class="small muted">Anchor fallback used: ${mdInline(finding.fallback)}</p>`
 		: '';
 
 	const link = finding.thread_url
 		? `<p class="small"><a href="${esc(finding.thread_url)}" target="_blank" rel="noreferrer">Existing thread &#8599;</a></p>`
 		: '';
 
+	const haystack = [id, sev, finding.title, loc, finding.category, finding.description, STATUSES[status].label]
+		.filter(Boolean)
+		.join(' ')
+		.toLowerCase();
+
 	return `
-<article class="card finding" data-sev="${esc(sev)}" data-status="${esc(status)}">
+<article class="card finding" data-sev="${esc(sev)}" data-status="${esc(status)}" data-search="${esc(haystack)}">
   <header class="finding-h">
     <span class="pill sev-${esc(sev)}">${esc(sev)}</span>
-    <h3>${esc(finding.title || id)}</h3>
+    <h3>${mdInline(finding.title || id)}</h3>
     <span class="fid mono">${esc(id)}</span>
     ${statusPill}
   </header>
   <div class="finding-meta small muted">
     ${loc ? `<span class="mono">${esc(loc)}</span>` : ''}
-    ${finding.category ? `<span>&middot;</span><span>${esc(finding.category)}</span>` : ''}
+    ${finding.category ? `<span>&middot;</span><span>${mdInline(finding.category)}</span>` : ''}
   </div>
-  ${finding.description ? `<p>${esc(finding.description)}</p>` : ''}
-  ${suggestion}${fix}${prompt}${fallback}${link}
+  ${mdBlock(finding.description)}
+  ${fix}${prompt}${fallback}${link}
 </article>`;
 }
 
@@ -275,7 +428,7 @@ function renderReport(data, counts, indexHref) {
 			const cls = st === 'clean' ? 'ok' : st === 'not_reviewed' ? 'reject' : 'warn';
 			const value =
 				st === 'clean' ? 'clean' : st === 'not_reviewed' ? `not reviewed${c.note ? ` — ${c.note}` : ''}` : `${c.count ?? 0}`;
-			return `<span class="pill ${cls}">${esc(c.dimension)} <span class="cov-v">${esc(value)}</span></span>`;
+			return `<span class="pill ${cls}">${esc(c.dimension)} <span class="cov-v">${mdInline(value)}</span></span>`;
 		})
 		.join('');
 
@@ -297,16 +450,20 @@ function renderReport(data, counts, indexHref) {
   <table class="tbl small">
     <thead><tr><th>Hit</th><th>Reason for dismissal</th></tr></thead>
     <tbody>${dismissed
-		.map((d) => `<tr><td class="mono">${esc(d.hit)}</td><td>${esc(d.reason)}</td></tr>`)
+		.map((d) => `<tr><td class="mono">${esc(d.hit)}</td><td>${mdInline(d.reason)}</td></tr>`)
 		.join('')}</tbody>
   </table></details>`
 			: '<p class="small muted">No dismissed hits recorded.</p>'
 	}
 </div>`;
 
+	// Sits inside the header card, under the executive summary — it is part of the
+	// overall assessment, not a footnote after the findings.
 	const good = Array.isArray(data.good) ? data.good.filter(Boolean) : [];
 	const goodBlock = good.length
-		? `<h2>What looks good</h2><div class="card pad"><ul class="good">${good.map((g) => `<li>${esc(g)}</li>`).join('')}</ul></div>`
+		? `<div class="good-wrap"><div class="block-h">What looks good</div><ul class="good">${good
+				.map((g) => `<li>${mdInline(g)}</li>`)
+				.join('')}</ul></div>`
 		: '';
 
 	const unreviewed = Array.isArray(data.unreviewed_files) ? data.unreviewed_files.filter(Boolean) : [];
@@ -324,11 +481,18 @@ function renderReport(data, counts, indexHref) {
 		)
 		.join('');
 
+	const changeLink = data.url
+		? `<a class="nav-btn" href="${esc(data.url)}" target="_blank" rel="noreferrer">${esc(
+				data.platform === 'github' ? 'Open PR' : 'Open MR',
+			)} ${esc(idLabel.replace(/^(PR|MR) /, ''))} &#8599;</a>`
+		: '';
+
 	return `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Review ${esc(idLabel)} — ${esc(data.title || data.project || '')}</title>
+${THEME_BOOT}
 <style>${CSS}
 .head { padding: 26px 28px; margin-bottom: 26px; }
 .head-top { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
@@ -354,7 +518,7 @@ function renderReport(data, counts, indexHref) {
 .count { display: inline-block; padding: 0 6px; border-radius: 6px; background: var(--neutral-soft);
          color: var(--muted); font-size: 11.5px; font-weight: 650; vertical-align: 1px; }
 .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 26px 0 4px; }
-.filter { border-radius: 999px; opacity: .45; }
+.filter { opacity: .45; }
 .filter.on { opacity: 1; border-color: var(--accent); color: var(--accent); }
 .finding { padding: 18px 20px; margin-bottom: 12px; }
 .finding-h { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
@@ -378,10 +542,15 @@ details[open] > summary .chev { transform: rotate(90deg); }
 .tbl td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
 .tbl tr:last-child td { border-bottom: none; }
 .good { margin: 0; padding-left: 20px; } .good li { margin-bottom: 5px; }
+.good-wrap { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.good-wrap .good { font-size: 14px; }
 .foot { margin-top: 40px; font-size: 12.5px; color: var(--muted); text-align: center; }
 .empty { padding: 26px; text-align: center; color: var(--muted); }
+.no-hits { padding: 22px; text-align: center; color: var(--muted); display: none; }
 </style></head>
-<body><div class="wrap">
+<body>
+${renderNav(indexHref, `<span class="mono">${esc(data.project || '')}</span> &middot; ${esc(idLabel)}`, `<input type="search" id="q" placeholder="Search findings…" autocomplete="off">${changeLink}`)}
+<div class="wrap">
 
 <header class="card head">
   <div class="head-top">
@@ -400,7 +569,7 @@ details[open] > summary .chev { transform: rotate(90deg); }
     ${metaRow('Mode', esc(data.mode))}
     ${metaRow('Labels', (data.labels || []).length ? (data.labels || []).map((l) => `<span class="pill">${esc(l)}</span>`).join(' ') : '')}
   </dl>
-  ${data.executive_summary ? `<div class="summary"><p>${esc(data.executive_summary)}</p></div>` : ''}
+  ${data.executive_summary || goodBlock ? `<div class="summary">${mdBlock(data.executive_summary)}${goodBlock}</div>` : ''}
 </header>
 
 <div class="stats">
@@ -414,13 +583,12 @@ ${coverage ? `<h2>Coverage</h2><div class="cov">${coverage}</div>` : ''}
 
 ${
 	findings.length
-		? `<div class="bar no-print"><span class="small muted">Filter:</span>${filters}<button type="button" class="filter on" data-filter="ALL">All</button></div>${groups}`
+		? `<div class="bar no-print"><span class="small muted">Filter:</span>${filters}<button type="button" class="filter on" data-filter="ALL">All</button></div>${groups}<div class="card no-hits" id="no-hits">No finding matches this search.</div>`
 		: '<h2>Findings</h2><div class="card empty">No findings recorded for this review.</div>'
 }
 
 ${prescanBlock}
 ${unreviewedBlock}
-${goodBlock}
 
 <p class="foot">Generated by <span class="mono">/mwd-code-review-interactive</span> &middot; ${esc(formatDateTime(data.generated_at))} &middot; <a href="${esc(indexHref)}">All reviews</a></p>
 </div>
@@ -445,11 +613,17 @@ var allBtn = document.querySelector('.filter[data-filter="ALL"]');
 var sevBtns = Array.prototype.slice.call(document.querySelectorAll('.filter')).filter(function (f) {
   return f !== allBtn;
 });
+var q = document.getElementById('q');
+var noHits = document.getElementById('no-hits');
 function isOn(f) { return f.classList.contains('on'); }
 function apply() {
   var active = sevBtns.filter(isOn).map(function (f) { return f.dataset.filter; });
+  var term = q ? q.value.trim().toLowerCase() : '';
+  var shown = 0;
   document.querySelectorAll('.finding').forEach(function (el) {
-    el.style.display = active.indexOf(el.dataset.sev) > -1 ? '' : 'none';
+    var hit = active.indexOf(el.dataset.sev) > -1 && (!term || el.dataset.search.indexOf(term) > -1);
+    el.style.display = hit ? '' : 'none';
+    if (hit) shown++;
   });
   // A group heading is followed by its finding cards; hide it when they are all filtered out.
   document.querySelectorAll('h2').forEach(function (h) {
@@ -461,8 +635,10 @@ function apply() {
     }
     if (owns) h.style.display = any ? '' : 'none';
   });
+  if (noHits) noHits.style.display = shown ? 'none' : 'block';
   if (allBtn) allBtn.classList.toggle('on', active.length === sevBtns.length);
 }
+if (q) q.addEventListener('input', apply);
 sevBtns.forEach(function (f) {
   f.addEventListener('click', function () {
     f.classList.toggle('on');
@@ -473,8 +649,10 @@ sevBtns.forEach(function (f) {
 });
 if (allBtn) allBtn.addEventListener('click', function () {
   sevBtns.forEach(function (o) { o.classList.add('on'); });
+  if (q) q.value = '';
   apply();
 });
+${THEME_SCRIPT}
 </script>
 </body></html>`;
 }
@@ -524,6 +702,7 @@ function renderIndex(entries) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Code review archive</title>
+${THEME_BOOT}
 <style>${CSS}
 .wrap { max-width: 1240px; }
 .head { padding: 24px 26px; margin-bottom: 22px; }
@@ -531,11 +710,6 @@ function renderIndex(entries) {
 .stat { flex: 1 1 110px; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
 .stat-v { font-size: 22px; font-weight: 680; letter-spacing: -.02em; line-height: 1.2; }
 .stat-l { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-input[type=search] {
-  font: inherit; width: 100%; padding: 9px 13px; border-radius: 9px; margin-top: 16px;
-  border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
-}
-input[type=search]:focus { outline: none; border-color: var(--accent); }
 .tbl-scroll { overflow-x: auto; border-radius: var(--radius); }
 table { width: 100%; min-width: 880px; border-collapse: collapse; }
 th.t-title, td.t-title { width: 40%; }
@@ -549,8 +723,11 @@ tbody tr:hover { background: var(--surface-2); }
 .pill.sev-CRITICAL, .pill.sev-HIGH, .pill.sev-MED, .pill.sev-LOW { padding: 2px 7px; font-size: 11px; }
 .foot { margin-top: 32px; font-size: 12.5px; color: var(--muted); text-align: center; }
 .empty { padding: 40px; text-align: center; color: var(--muted); }
+.no-hits { padding: 26px; text-align: center; color: var(--muted); display: none; margin-top: 12px; }
 </style></head>
-<body><div class="wrap">
+<body>
+${renderNav(null, `${total} review${total === 1 ? '' : 's'} &middot; ${projects} project${projects === 1 ? '' : 's'}`, '<input type="search" id="q" placeholder="Search project, title, author…" autocomplete="off">')}
+<div class="wrap">
 <header class="card head">
   <h1>Code review archive</h1>
   <p class="small muted">Every review run with <span class="mono">/mwd-code-review-interactive</span>, newest first.</p>
@@ -562,7 +739,6 @@ tbody tr:hover { background: var(--surface-2); }
     ${statCard('critical', sums.critical, 'CRITICAL')}
     ${statCard('high', sums.high, 'HIGH')}
   </div>
-  <input type="search" id="q" placeholder="Filter by project, title, author, verdict…" autocomplete="off">
 </header>
 
 ${
@@ -573,17 +749,24 @@ ${
 </table></div>`
 		: '<div class="card empty">No reviews recorded yet.</div>'
 }
+<div class="card no-hits" id="no-hits">No review matches this search.</div>
 
 <p class="foot">Generated ${esc(formatDateTime(new Date().toISOString()))}</p>
 </div>
 <script>
 var q = document.getElementById('q');
+var noHits = document.getElementById('no-hits');
 if (q) q.addEventListener('input', function () {
   var v = q.value.trim().toLowerCase();
+  var shown = 0;
   document.querySelectorAll('#rows tr').forEach(function (tr) {
-    tr.style.display = !v || tr.dataset.search.indexOf(v) > -1 ? '' : 'none';
+    var hit = !v || tr.dataset.search.indexOf(v) > -1;
+    tr.style.display = hit ? '' : 'none';
+    if (hit) shown++;
   });
+  if (noHits) noHits.style.display = shown ? 'none' : 'block';
 });
+${THEME_SCRIPT}
 </script>
 </body></html>`;
 }
