@@ -99,7 +99,7 @@ optional and its section is skipped when absent. Unknown keys are ignored, so ex
       "fallback": "file-level comment",   // only when the inline anchor needed a fallback
       "description": "What is wrong and why it matters.",
       "suggestion": "…",                  // the suggestion block content, when one was posted
-      "fix_code": "…",                    // the Fix block from the chat summary
+      "fix_code": "…",                    // concrete code showing the fix — chat only shows it on request
       "ai_prompt": "…"                    // the full AI-fix prompt, verbatim
     }
   ],

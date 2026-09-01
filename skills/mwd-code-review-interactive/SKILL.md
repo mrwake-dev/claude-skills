@@ -9,9 +9,10 @@ disable-model-invocation: true
 
 Perform an **interactive** code review on the merge request / pull request at $ARGUMENTS. Generate
 feedback exactly as a normal review, then confirm with the user which findings to post and post the
-approved ones as **inline diff comments**. Rejected or un-postable findings stay in a final chat
+approved ones as **inline diff comments**. Rejected or un-postable findings stay in a short final chat
 summary — nothing else is written to the platform. Every run also writes an HTML report of the whole
-review into a persistent local archive (Step 4.5).
+review into a persistent local archive; that report, not the chat summary, carries the full detail of
+each finding.
 
 The skill supports **both GitLab (via `glab`) and GitHub (via `gh`)**. The review logic (Steps 2–3)
 is identical on both; only the fetch (Step 1) and post (Step 4.3) plumbing differs, and that lives in
@@ -25,7 +26,7 @@ a fresh, minimally-initialized shell (no environment shared between blocks), so 
 tool paths up front via `command -v` with a fallback (`/opt/homebrew/bin/…`, `/usr/bin/jq`) and fails
 fast if a tool is missing. Always call the resolved `"$GLAB"` / `"$GH"` / `"$JQ"` variables.
 
-**Running the helper script:** Step 4.5 invokes `scripts/render-report.js`, which lives next to this
+**Running the helper script:** Step 4.4.a invokes `scripts/render-report.js`, which lives next to this
 `SKILL.md` in the skill's installation directory — **not** in the user's project. Resolve
 `SKILL_DIR="$(dirname "<path-to-this-SKILL.md>")"` and call it by absolute path
 (`node "$SKILL_DIR/scripts/render-report.js" …`). If the script "doesn't exist", you are looking in the
@@ -230,7 +231,7 @@ Subagents **never** interact with the user or with GitLab/GitHub — no question
     "new_line": 42,
     "anchorable": true,
     "description": "what is wrong and why it matters (1-3 sentences)",
-    "fix_code": "concrete code for the chat summary's Fix block",
+    "fix_code": "concrete code showing the fix — the finding's Fix block in the report",
     "suggestion": "replacement line(s) when suggestion-eligible, else null",
     "suggestion_range": "-0+0",
     "ai_prompt": "full AI-fix prompt text per the rules below"
@@ -263,7 +264,7 @@ In addition to the review text, capture the data needed to post the finding as a
   - **Inline suggestion block** when the entire fix is a replacement of the anchored line or a small contiguous range (≤ ~5 lines) on the **new side** of the diff (`new_line` is set). Both GitLab and GitHub render suggestion blocks the author applies with one click in the platform UI (fence syntax differs — see Step 4.3).
   - **AI-fix prompt** for everything else (multi-line rewrites, multi-file changes, dependency bumps, refactors).
   - **Both** when a mechanical local edit is only part of a wider fix (e.g., swap a literal for an enum via suggestion + bump the dependency via prompt).
-- **AI-fix prompt** — a concrete, self-contained instruction an AI coding agent (Claude Code, Cursor, etc.) could paste and act on directly: which file, the location, the problem, the required fix, the suggested implementation (the same code snippet shown in the chat summary's **Fix:** block), and any constraints. Embed the snippet as plain indented lines — never as a nested triple-backtick fence, which would terminate the prompt's outer fence in Step 4.3 — and label it as suggested (verify imports/APIs against the codebase), since review snippets are written without compiling.
+- **AI-fix prompt** — a concrete, self-contained instruction an AI coding agent (Claude Code, Cursor, etc.) could paste and act on directly: which file, the location, the problem, the required fix, the suggested implementation (the same snippet as the finding's `fix_code`), and any constraints. Embed the snippet as plain indented lines — never as a nested triple-backtick fence, which would terminate the prompt's outer fence in Step 4.3 — and label it as suggested (verify imports/APIs against the codebase), since review snippets are written without compiling.
 
 #### Verification pass (mandatory, before presenting)
 
@@ -310,7 +311,7 @@ recipe in the platform reference you loaded in Step 0 (§"Step 4.3"). That refer
 **body** described below is identical on both platforms — only the API call and the suggestion-fence
 syntax differ.
 
-**Comment body format** — the first line is a hidden marker `<!-- mwd-review:<ID>:<file>:<line> -->` followed by a blank line (HTML comments don't render in GitLab or GitHub markdown; the marker lets future runs recognize and dedupe this finding). Then the finding (severity+ID, title, **Category**, and what's wrong), an optional **suggestion block**, then a **collapsible** section (both GitLab and GitHub Flavored Markdown support `<details>`/`<summary>`) holding a copy-ready AI prompt inside a fenced code block (both platforms render a one-click copy button on code blocks). The prompt **must include the suggested code fix** — the same snippet used in the chat summary's **Fix:** block — embedded as plain indented lines: a nested triple-backtick fence would terminate the outer `text` fence, break rendering, and truncate what the copy button copies. The trailing `\` after the title line is a hard line break, so **Category** renders directly beneath the title; the blank lines around `<summary>` and before `</details>` are required so the fenced block renders (the `suggestion:-0+0` fence below is the **GitLab** form — on GitHub use a plain `suggestion` fence, see the suggestion rules):
+**Comment body format** — the first line is a hidden marker `<!-- mwd-review:<ID>:<file>:<line> -->` followed by a blank line (HTML comments don't render in GitLab or GitHub markdown; the marker lets future runs recognize and dedupe this finding). Then the finding (severity+ID, title, **Category**, and what's wrong), an optional **suggestion block**, then a **collapsible** section (both GitLab and GitHub Flavored Markdown support `<details>`/`<summary>`) holding a copy-ready AI prompt inside a fenced code block (both platforms render a one-click copy button on code blocks). The prompt **must include the suggested code fix** — the same snippet as the finding's `fix_code` — embedded as plain indented lines: a nested triple-backtick fence would terminate the outer `text` fence, break rendering, and truncate what the copy button copies. The trailing `\` after the title line is a hard line break, so **Category** renders directly beneath the title; the blank lines around `<summary>` and before `</details>` are required so the fenced block renders (the `suggestion:-0+0` fence below is the **GitLab** form — on GitHub use a plain `suggestion` fence, see the suggestion rules):
 
 ````markdown
 <!-- mwd-review:HIGH-1:src/foo.ts:42 -->
@@ -333,7 +334,7 @@ Problem: <concise description of the issue>.
 Required fix: <concrete, actionable instructions>.
 Suggested implementation (verify imports/APIs against the codebase before applying):
 
-    <the fix snippet from the chat summary's Fix block, as plain indented lines — no backtick fences>
+    <the finding's fix_code, as plain indented lines — no backtick fences>
 
 Constraints: keep changes minimal and consistent with surrounding code; update/add tests if applicable.
 ```
@@ -439,20 +440,16 @@ review output.
 
 ##### 4.4.b Final chat summary
 
-Produce the final review summary **in chat only** — do not post it to GitLab/GitHub. Per the code-review output convention, present it as a single raw, copy-pasteable fenced markdown block (use a 4-backtick outer fence, since the content contains ` ``` ` code blocks). Use the format below; include both what was posted and what was kept in chat.
+Close the run with a **short** summary **in chat only** — do not post it to GitLab/GitHub. The 4.4.a
+report already holds every finding in full (description, fix code, AI prompt), so this summary is a
+one-screen manifest that points at it, **never a second copy of the review**. Render it as normal
+markdown — no outer copy-paste fence, and no code blocks anywhere in it. Every finding appears exactly
+once, as a **single table row**, whether it was posted or kept.
 
-First, the **finding block** format — used for **every** finding, whether posted or kept (IDs match Step 4.1):
-
-### [CRITICAL-1] Title
-- **File:** `path/to/File.ts`, line(s) X-Y
-- **Category:** [e.g., DoS & Resource Exhaustion]
-- **Description:** What the issue is and why it matters
-- **Fix:**
-```ts
-// Concrete code showing the fix
-```
-
-Severity tags: `[CRITICAL-n]`, `[HIGH-n]`, `[MED-n]`, `[LOW-n]` (attack scenario optional for MED/LOW; LOW may be abbreviated). Then lay the summary out as:
+**This brevity is scoped to the chat summary and nothing else.** The inline comments posted in 4.3 and
+the HTML report written in 4.4.a stay **full-length** — full description, suggestion block, and the
+complete AI-fix prompt with its code snippet, exactly as those steps specify. Never trim a posted
+comment or a report entry to match the style below. Layout:
 
 ### Executive Summary
 [2-3 sentences: overall assessment, number of critical/high findings, primary areas of concern. Include the CI status (e.g., "CI: failed") and, for large changes, name any files that could not be reviewed.]
@@ -466,14 +463,34 @@ Severity tags: `[CRITICAL-n]`, `[HIGH-n]`, `[MED-n]`, `[LOW-n]` (attack scenario
 **Report:** the `REPORT_URL` from 4.4.a, plus the `INDEX_URL` for the full archive — e.g.
 `file:///Users/you/.claude/code-review-reports/reports/gitlab.com/group/repo/mr-482-20260809-141203.html` (all reviews: `…/index.html`)
 
-### Posted inline
-Every finding posted as an inline comment, shown **in full** using the finding block format above — not just a one-line list. Add a `**Posted:**` line to each with the direct link (GitLab `<mr-url>#note_<note_id>`, or the GitHub comment `html_url`) and, if it needed a fallback (non-inline anchor), the fallback level used.
+### Posted inline (n)
 
-### Kept in chat (not posted)
-Findings the user rejected plus any un-anchorable findings, shown **in full** using the finding block format above. List "already raised" findings here too — one line each with a link to the existing thread instead of a full block.
+| ID | Finding | Location | Category | Thread |
+|:---|:--------|:---------|:---------|:-------|
+| HIGH-1 | Unbounded retry loop | `src/api.ts:42` | DoS & Resource Exhaustion | [note](<mr-url>#note_1) |
+| MED-1 | Missing null guard | `src/ui.tsx:10` | Correctness | [note](<mr-url>#note_2) — file-level fallback |
+
+### Kept in chat (n)
+
+| ID | Finding | Location | Category | Why not posted |
+|:---|:--------|:---------|:---------|:---------------|
+| MED-2 | Duplicate fetch per render | `src/a.ts:88` | Efficiency | not selected |
+| LOW-1 | Stale JSDoc on `parse()` | `src/b.ts:12` | Docs | un-anchorable |
+| LOW-2 | Unhandled reject path | `src/c.ts:5` | Correctness | already raised — [thread](<url>) |
+
+Table rules:
+- **ID** without brackets; severity is readable from the prefix, so no separate severity column.
+- **Finding** is a noun phrase of ≤ ~8 words — not a sentence, not the description.
+- Never add a Description or Fix column, and never inline a code snippet: that detail is what the report is for.
+- Skip an empty group's table entirely and say it in one line instead ("Nothing posted — all 3 findings kept in chat.").
+- A posted finding that needed a non-inline anchor notes the fallback level in the Thread cell, as above.
 
 ### What looks good
-[Acknowledge good patterns and clean code where appropriate, if any]
+[One line, only if there is genuinely something to name. Omit the section otherwise.]
+
+**On demand only:** if the user then asks about a specific ID, print that one finding in full — file
+and line(s), category, description, and its `fix_code` in a fenced block. Never volunteer these blocks
+for the whole set; that is the long output this summary replaces.
 
 ---
 
