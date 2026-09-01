@@ -54,11 +54,33 @@ Verify everything resolves:
 node --version && glab auth status && gh auth status && jq --version
 ```
 
+## Code review
 
-## Code review archive
+`/mwd-code-review-interactive` works on **GitLab MRs (via `glab`) and GitHub PRs (via `gh`)**, picking
+the platform from the repo URL. A run goes: fetch the diff → review it → confirm with you → post only
+what you approved as inline diff comments, each with a one-click suggestion block and a copy-ready
+AI-fix prompt.
 
-`/mwd-code-review-interactive` writes an HTML report for every review it runs, outside any repository
-so work repos stay clean:
+What it does beyond a plain review:
+
+- **Verifies every finding** against the full file and its callers before you ever see it, and drops
+  what wider context already handles.
+- **Dedupes** against previous runs of the skill and against existing human threads, so nothing is
+  raised twice.
+- **Fans out** on large changes — one subagent per dimension (correctness, security, docs, language,
+  device runtime), merged back in the main thread. Small changes are reviewed inline but walk the
+  same dimension list.
+- **Pre-scans mechanically** with grep for absolute prohibitions (`any`, `React.FC`, bare `except:`,
+  …); every hit becomes a finding or a recorded dismissal.
+- **Reports coverage** per dimension, so both modes are auditable the same way.
+
+Review checklists live in the skill's `references/`, one per language plus device-runtime rules for
+Tizen/webOS/BrightSign; the platform plumbing is split into `platform-gitlab.md` and
+`platform-github.md`.
+
+### Report archive
+
+Every run writes an HTML report outside any repository, so work repos stay clean:
 
 ```
 ~/.claude/code-review-reports/
@@ -68,11 +90,13 @@ so work repos stay clean:
 ```
 
 Each report holds the full audit trail — findings that were posted, rejected, and already raised, with
-fix code, copy-ready AI prompts, per-dimension coverage, and the pre-scan dismissals. Nothing is ever
-overwritten; re-reviewing the same MR appends a new dated entry. Override the location with
-`MWD_REVIEW_REPORTS_DIR`.
+fix code, copy-ready AI prompts, per-dimension coverage, and the pre-scan dismissals. It carries a top
+bar with a search box, a light/dark toggle, a link straight to the MR/PR, and a link back to the
+index. Nothing is ever overwritten; re-reviewing the same MR appends a new dated entry. Override the
+location with `MWD_REVIEW_REPORTS_DIR`.
 
-Reports are never opened automatically — use `/mwd-review-report` when you want one in the browser.
+Every run prints its report link in chat when it finishes. Reports are never opened automatically —
+use `/mwd-review-report` to reopen one later.
 
 ## Commands
 
@@ -94,16 +118,16 @@ Reports are never opened automatically — use `/mwd-review-report` when you wan
 
 ## Skills
 
-| Name                                               | Description                                                                                                                                                |
-|:---------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `/mwd-agent-rebase`                                | Rebase a feature branch onto the latest target branch (`origin/master`/`origin/main` by default), resolve mechanical conflicts automatically (regenerating lockfiles in Docker as a last resort), and force-push with `--force-with-lease`. |
-| `/mwd-code-review-interactive [mr-or-pr-url]`      | Interactive code review for a **GitLab MR (via `glab`) or GitHub PR (via `gh`)** — auto-detected from the repo URL. Generate findings, verify each against the full codebase, dedupe against previous runs and existing threads, confirm which to post, and post approved ones as inline diff comments with one-click suggestion blocks and copy-ready AI-fix prompts (including the fix code). Review checklists live in `references/` per language, including device-runtime rules for Tizen/webOS/BrightSign; platform-specific fetch/post plumbing lives in `references/platform-gitlab.md` and `references/platform-github.md`. On large changes, review dimensions fan out to parallel subagents whose findings are merged in the main thread; small changes are reviewed inline but walk the same dimension list, and a mechanical grep pre-scan for absolute prohibitions (`any`, `FC`, bare `except:`, …) plus a per-dimension coverage line in the summary keep both modes equally auditable. Every run also writes a self-contained HTML report — all findings (posted, rejected, already-raised), fix code, copy-ready AI prompts, coverage and pre-scan audit trail — into the archive at `~/.claude/code-review-reports/`, with an `index.html` logging every review across all projects. |
-| `/mwd-code-review-local [gitlab-mr-url]`           | Perform a code review (local, chat-only) for a selected GitLab merge request (by URL) and provide feedback.                                                 |
-| `/mwd-resolve-mr-comments [mr-or-pr-url]`          | Read every review comment on a **GitLab MR (via `glab`) or GitHub PR (via `gh`)** — auto-detected from the repo URL. Verify each comment against the current code (already-addressed / invalid / non-actionable comments are reported, not applied), confirm which fixes to apply (batch multi-select), and edit the **working tree only**. Never commits, stages, pushes, or writes back to the platform — the user reviews the uncommitted diff. |
-| `/mwd-create-mr-description`                       | Summarize changes on the active branch and create a simple description for the merge request.                                                              |
-| `/mwd-java-security-check`                         | Verify the whole project for security issues based on Java standards and provide feedback on how to fix them.                                              |
-| `/mwd-markdown-check [file.md] <language:english>` | Validate a Markdown file, check the grammar, and write tips on how to improve readability.                                                                 |
-| `/mwd-shorter-jsdocs [--committed \| --uncommitted] [path...]` | Audit the JSDoc blocks this branch added or touched — flag bloated ones to shorten and unnecessary ones to remove, then apply after confirmation. |
-| `/mwd-node-security-audit`                         | Comprehensively audit a Node.js project: find vulnerabilities, outdated and deprecated packages, peer dependency conflicts, and Node.js engine mismatches. |
-| `/signage-cdp`                                     | Debug and develop on signage devices (Tizen, webOS, BrightSign, Android players) live over Chrome DevTools Protocol — inspect DOM, eval JS, screenshot, tail console, record network. |
-| `/sos-applet-redesign`                             | Redesign a signageOS single-file applet onto the shared design system, add an on-screen debug mode, harden reconnect/sync playback, verify on-device via CDP, and generate Marketplace docs. |
+| Name                                                          | Description                                                                                                     |
+|:--------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------|
+| `/mwd-code-review-interactive [mr-or-pr-url]`                 | Review a GitLab MR or GitHub PR, confirm which findings to post, and post them as inline comments — see [Code review](#code-review). |
+| `/mwd-code-review-local [gitlab-mr-url]`                      | Review a GitLab MR in chat only. Nothing is posted back to the platform.                                          |
+| `/mwd-resolve-mr-comments [mr-or-pr-url]`                     | Check every review comment against the current code, then apply the fixes you pick — working tree only, never commits or pushes. |
+| `/mwd-create-mr-description`                                  | Summarize the active branch's changes into a merge request description.                                           |
+| `/mwd-agent-rebase`                                           | Rebase a branch onto its target, resolve mechanical conflicts, and force-push with `--force-with-lease`.           |
+| `/mwd-shorter-jsdocs [--committed \| --uncommitted] [path...]` | Trim the JSDoc this branch touched — shorten the bloated blocks, drop the unnecessary ones.                       |
+| `/mwd-markdown-check [file.md] <language:english>`            | Check a Markdown file's grammar and readability.                                                                  |
+| `/mwd-node-security-audit`                                    | Audit a Node.js project for vulnerabilities, outdated and deprecated packages, and engine mismatches.             |
+| `/mwd-java-security-check`                                    | Audit a Java project against security standards and report how to fix what it finds.                              |
+| `/signage-cdp`                                                | Debug a signage device (Tizen, webOS, BrightSign, Android) live over Chrome DevTools Protocol.                     |
+| `/sos-applet-redesign`                                        | Redesign a signageOS applet onto the shared design system and prepare it for the Marketplace.                      |
