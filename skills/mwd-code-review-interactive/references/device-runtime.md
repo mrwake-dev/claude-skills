@@ -8,24 +8,90 @@ invisible in CI and on developer machines, and only surface on the fleet.
 
 ## Engine & build-target compatibility
 
-The oldest supported devices run ancient engines (Tizen 2.4 ≈ Chromium 47-era WebKit; early webOS
-is similar; BrightSign ships its own Chromium builds). Anything modern in the diff must be covered
-by the build target.
+Source here is routinely written in modern JS and downlevelled by the bundler, so "modern syntax in
+the diff" is not by itself a defect. What decides it is the **real** build target, whether a gate
+enforces it, and whether lib APIs are polyfilled. Establish those three facts first — every rule in
+this section is judged against them.
 
-- Check `tsconfig.json` `target`, browserslist, and babel/swc config against new **syntax** in the
-  diff: optional chaining `?.`, nullish coalescing `??`, logical assignment `??=`/`||=`,
-  `String.prototype.replaceAll`, `Array.prototype.flat`/`flatMap`, `Object.fromEntries`,
-  `globalThis`, BigInt, class fields.
-- Runtime **APIs are not transpiled** — verify availability or a polyfill for: `fetch`,
-  `AbortController`, `URLSearchParams`, `IntersectionObserver`, `ResizeObserver`,
-  `requestIdleCallback`, Web Crypto, `Promise.allSettled`/`any`.
-- **CSS** in the diff: flexbox `gap`, `aspect-ratio`, `position: sticky`, `inset`, newer selectors
-  — verify against the oldest target WebKit.
-- **Untranspiled dependencies** (classic fleet-killer): a new or bumped dependency may publish
-  modern syntax in its dist. If the bundler does not transpile `node_modules`, the app
-  white-screens on old devices and neither type-check nor CI catches it. For each new/bumped
-  runtime dependency, check the published dist syntax level (or the package's `engines`/browser
-  support statement), or confirm `node_modules` transpilation is configured.
+### Resolve the target first (mandatory)
+
+**1. Real transpile target.** Search in this order, first hit wins. `tsconfig.json` `target` is
+**not** authoritative — it reads `esnext` in repos that ship ES5 — and is a fallback only when
+nothing below exists:
+
+| Look in                                                     | Field                                                                        |
+|:------------------------------------------------------------|:-----------------------------------------------------------------------------|
+| `rspack.config.*` / `webpack.config.*` using `swc-loader`   | `jsc.target`                                                                 |
+| `.swcrc`                                                     | `jsc.target`                                                                 |
+| `webpack*.config.*` using `babel-loader`                    | `presets: ['@babel/preset-env', { targets }]` — **absent `targets` means ES5** |
+| `tools/build.mjs` driving `@signageos/lib-bundler`          | bundler default (esbuild `es6`, then swc down to `es5`)                      |
+| `.browserslistrc` / `package.json` `browserslist`           | the query                                                                    |
+| `tsconfig.json` (last resort)                                | `target`                                                                     |
+
+Note which bundle the changed file belongs to — a repo commonly targets ancient Chromium for its
+client bundle and current Node for its server bundles, from the same `package.json`.
+
+**2. The gate.** Is `es-check` (or equivalent) both present *and* chained into the `build` script? A
+devDependency nothing runs is not a gate. Record the asserted level — it is often looser than the
+transpile target (swc emitting `es5` behind `es-check --module es6` is real).
+
+**3. Polyfill coverage.** Broad (`core-js/stable` imported at an entry point), narrow (a hand-rolled
+`src/polyfills/*` covering one or two APIs), or none. This decides whether a lib-API hit is a defect
+or a non-issue.
+
+State the resolved values, and the `file:line` you read them from, in any finding that depends on them.
+
+### Transpiled syntax — usually not a finding
+
+`?.`, `??`, `??=`/`||=`, `**`, `async`/`await`, object spread, optional catch binding, class fields
+`#x`, `for await`, `Array.prototype.flat`/`flatMap` and `Object.fromEntries` are all rewritten by
+swc/babel/esbuild. Raise them only when:
+
+- the file is **outside what the loader processes** — a dependency outside a `node_modules`
+  allowlist, or a config/tool/script file nothing compiles (HIGH);
+- there is **no gate**, so a transpile misconfiguration ships silently (MED);
+- a gate exists and would fail the build (LOW–MED — say so, and point at the gate).
+
+Regex is the exception that is never transpiled: named capture groups, lookbehind and the `s`/`u`
+flags are engine features, so they fail at runtime regardless of the target.
+
+### Non-transpiled lib & DOM APIs — the real hazard
+
+These are never rewritten, are invisible to `es-check` (which parses syntax only), and type-check
+cleanly whenever `lib` is `es2022`/`esnext`. Nothing in the toolchain catches them and they
+white-screen on the device. Judge each against the resolved target, naming the ES year it needs:
+
+- **ES2015–17** — `Object.assign`, `Array.from`, `Object.entries`/`values`, `String.padStart`/`padEnd`
+- **ES2018–20** — `Promise.prototype.finally`, `String.trimStart`/`trimEnd`, `String.matchAll`,
+  `Promise.allSettled`, `globalThis`, `BigInt`
+- **ES2021+** — `String.replaceAll`, `Promise.any`, `Object.hasOwn`, `Array.prototype.at`,
+  `findLast`/`findLastIndex`, `structuredClone`
+- **DOM/BOM** — `fetch`, `AbortController`, `AbortSignal.timeout`, `URLSearchParams`,
+  `IntersectionObserver`, `ResizeObserver`, `requestIdleCallback`, `queueMicrotask`,
+  `new EventTarget()`, `Element.closest`, `replaceChildren`, Web Crypto (`crypto.subtle`)
+
+Severity: HIGH–CRITICAL where polyfill coverage is narrow or absent; MED where a broad `core-js` is
+imported at the entry point but the API falls outside its configured scope.
+
+### CSS
+
+Flexbox `gap`, `aspect-ratio`, `position: sticky`, `inset`, `:has()`, logical properties — verify
+against the oldest target WebKit. CSS is not transpiled either; autoprefixer adds prefixes but
+cannot add a missing feature.
+
+### Untranspiled dependencies (classic fleet-killer)
+
+A new or bumped dependency may publish modern syntax in its `dist`. Which of the two mechanisms the
+repo uses decides how serious that is:
+
+- **Dedicated `node_modules` rule** — a second loader entry matching `node_modules`, often
+  `enforce: 'post'`. Everything is downlevelled and a new dependency is covered by default.
+- **Selective `include` allowlist** — the loader processes `src` plus a named list of packages only.
+  Then **any** new runtime dependency is untranspiled by default. That is structural rather than a
+  judgement call: flag it and name the allowlist that has to be extended.
+
+Either way, for each new/bumped runtime dependency check the published dist syntax level, or the
+package's `engines`/browser-support statement.
 
 ## 24/7 longevity (the app never reloads)
 

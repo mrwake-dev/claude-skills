@@ -110,7 +110,7 @@ use `/mwd-review-report` to reopen one later.
 | `code-explorer`    | Analyzes existing codebase features by tracing execution paths, mapping architecture layers, and documenting dependencies to inform new development. |
 | `code-simplifier`  | Simplifies and refines code for clarity, consistency, and maintainability while preserving behavior.                                              |
 | `mirek-hater`      | Joke agent — responds to any mention of Mirek/mireček with funny situations and a little bit of well-deserved hate.                               |
-| `mwd-review-*`     | Five single-dimension reviewers (`-correctness`, `-security`, `-docs`, `-language`, `-device`) that `/mwd-code-review-interactive` fans out to on large changes. Spawned by the skill, not invoked directly. |
+| `mwd-review-*`     | Six single-dimension reviewers (`-correctness`, `-security`, `-docs`, `-language`, `-device`, `-platform-scripts`) that `/mwd-code-review-interactive` fans out to on large changes. Spawned by the skill, not invoked directly. |
 | `planner`          | Planning specialist for complex features, architectural changes, and refactoring — produces step-by-step implementation plans.                    |
 | `refactor-cleaner` | Dead-code cleanup and consolidation — runs analysis tools (knip, depcheck, ts-prune) to identify unused code and safely removes it.               |
 

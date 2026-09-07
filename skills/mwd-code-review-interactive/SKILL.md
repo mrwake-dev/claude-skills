@@ -83,7 +83,18 @@ change.
 
 - `references/general.md` — **always** (code quality, documentation & comment accuracy, correctness, architecture, logging, tests, dependencies, CHANGELOG, security).
 - The language files matching the diff, detected from file extensions: `references/typescript.md` (`.ts` / Node.js), `references/react.md` (`.tsx` / React — read together with typescript.md), `references/java.md`, `references/python.md`, `references/go.md`.
-- `references/device-runtime.md` — when the change touches code that runs on signage devices (Tizen, webOS, BrightSign, embedded Linux). Triggers: imports from `@signageos/front-applet`/`@signageos/front-display`, `tizen`/`webos`/`brightsign` in paths or configs, a browserslist targeting old Chromium/WebKit, applet or player-runtime directories. When unsure, read it — most changes in this ecosystem ship to devices.
+- `references/device-runtime.md` — when the change touches code that runs on signage devices (Tizen, webOS, BrightSign, embedded Linux). Confirm mechanically rather than by impression, because a missed trigger silently drops both the dimension and its pre-scan:
+
+  ```bash
+  grep -lE '@signageos/(front-applet|front-display|lib-bundler)' package.json                    # device runtime deps
+  grep -E '^\+\+\+ ' "$DIFF" | grep -iE 'tizen|webos|brightsign|applet|player'                   # device paths in the diff
+  ls .swcrc .browserslistrc rspack.config.* webpack*.config.* tools/build.mjs 2>/dev/null        # a bundler with a transpile target
+  ```
+
+  Any hit turns the dimension on. Otherwise fall back to the prose triggers — applet or player-runtime directories, a browserslist targeting old Chromium/WebKit — and when still unsure, apply it: most changes in this ecosystem ship to devices.
+
+  **When it applies, resolve the build target before reviewing anything** — follow "Resolve the target first" in `references/device-runtime.md` and record all three facts (real transpile target with its `file:line`, the ES gate and its asserted level or `none`, polyfill coverage). `tsconfig.json` `target` is not authoritative. In fan-out mode these go into the device agent's spawn prompt; in inline mode you use them yourself. Every syntax and lib-API hit is triaged against them.
+- `references/platform-scripts.md` — when the diff touches platform scripting: `.sh`/`.bash`, `.ps1`/`.psm1`/`.psd1`, `.brs`, `.bat`/`.cmd`, `.cs`. These ship to the device or drive its install and recovery, and no language file covers them.
 
 `references/platform-gitlab.md`, `references/platform-github.md`, and `references/report.md` are
 plumbing, not checklists — they are read in Steps 0 and 4.4, and never handed to a review subagent.
@@ -163,10 +174,31 @@ grep -nE '[^A-Za-z0-9_]_ *:?=' "$ADDED"                                         
                                                                                  # never match — every record starts `file:line:`)
 
 # --- device-runtime.md ---
-grep -nE '\?\.|\?\?|\|\|=|&&=|replaceAll\(|\.flat\(|\.flatMap\(|Object\.fromEntries|\bglobalThis\b|\bBigInt\b' "$ADDED"   # syntax vs build target
-grep -nE '\bfetch\(|AbortController|URLSearchParams|IntersectionObserver|ResizeObserver|requestIdleCallback|Promise\.(allSettled|any)|crypto\.subtle' "$ADDED"  # untranspilable runtime APIs
+# Resolve the real build target, the gate and polyfill coverage first (device-runtime.md, "Resolve
+# the target first") — that is what turns most hits below into one-line dismissals.
+
+# Lib & DOM APIs: never transpiled, invisible to es-check, invisible to tsc under `lib: es2022`.
+grep -nE 'Object\.(entries|values|assign|fromEntries|hasOwn)\(|Array\.from\(|\.(padStart|padEnd|trimStart|trimEnd|matchAll|replaceAll)\(' "$ADDED"           # ES2015-21 lib
+grep -nE 'Promise\.(allSettled|any)\(|\.finally\(|structuredClone\(|\.(at|findLast|findLastIndex)\(|\.(flat|flatMap)\(|\bglobalThis\b|\bBigInt\b' "$ADDED"   # ES2018-22 lib
+grep -nE '\bfetch\(|AbortController|AbortSignal\.timeout|URLSearchParams|IntersectionObserver|ResizeObserver|requestIdleCallback|queueMicrotask\(|new EventTarget\(|\.closest\(|\.replaceChildren\(|crypto\.subtle' "$ADDED"  # DOM/BOM
+
+# Regex syntax is engine-level — never transpiled, whatever the target.
+grep -nE '\(\?<[=!A-Za-z]' "$ADDED"                                              # named groups, lookbehind
+
+# Downlevellable syntax. Noise wherever a loader covers the file, so run this pass ONLY for files
+# nothing compiles (config/, tools/, scripts/, *.mjs, *.cjs, *.sh) or when there is no gate.
+grep -nE '\?\.|\?\?|\|\|=|&&=|\basync |\bawait |\{ *\.\.\.|for await|catch *\{|[A-Za-z0-9_)] *\*\* *[A-Za-z0-9_(]' "$ADDED"
+
 grep -nE 'setInterval\(|setTimeout\(|addEventListener\(' "$ADDED"                # needs matching teardown
-grep -nE 'gap *:|aspect-ratio|position *: *sticky|inset *:' "$ADDED"             # CSS vs oldest target WebKit
+grep -nE 'gap *:|aspect-ratio|position *: *sticky|inset *:|:has\(' "$ADDED"      # CSS vs oldest target WebKit
+
+# --- platform-scripts.md ---
+# Records are `file:line:text`, so the `^[^:]*\.ext:` anchor scopes each pass to its file type.
+grep -nE '^[^:]*\.(sh|bash):.*\b(rm|cp|mv|cd|mkdir) +[^|]*\$[A-Za-z_{]' "$ADDED"  # unquoted expansion in a destructive path
+grep -nE '^[^:]*\.(sh|bash):.*(`|\| *(ba)?sh\b|\beval )' "$ADDED"                 # backticks, curl|sh, eval
+grep -nE '^[^:]*\.(ps1|psm1):.*(Invoke-Expression|\biex\b|-ErrorAction +SilentlyContinue|-AsPlainText)' "$ADDED"
+grep -E '^\+\+\+ .*\.(sh|bash)$' "$DIFF"                                          # new/changed shell file — verify `set -euo pipefail`
+grep -E '^\+\+\+ .*\.(ps1|psm1)$' "$DIFF"                                         # new/changed PS file — verify $ErrorActionPreference / Set-StrictMode
 
 # --- general.md (added lines) ---
 grep -niE '(api[_-]?key|secret|token|password|passwd|credential)[^=:]{0,4}[:=][^=]{8,}' "$ADDED"  # hardcoded secrets
@@ -203,6 +235,7 @@ Pick based on the diff size measured in Step 1:
 | Documentation & comments                                          | `mwd-review-docs`         | `Docs & comments review`       | `references/general.md` — Documentation & comments section                               | always                               |
 | Language conventions                                              | `mwd-review-language`     | `<Language> conventions review` — name the detected language, e.g. `TypeScript conventions review` | the detected `references/typescript.md` / `react.md` / `java.md` / `python.md` / `go.md` | per detected language                |
 | Device runtime                                                    | `mwd-review-device`       | `Device runtime review`        | `references/device-runtime.md`                                                            | when the Step 2 device triggers match |
+| Platform scripts                                                  | `mwd-review-platform-scripts` | `Platform scripts review`  | `references/platform-scripts.md`                                                          | when the diff touches `.sh` / `.ps1` / `.brs` / `.bat` / `.cs` |
 
 Those agent types carry the invariants (own rule file only, account for every pre-scan hit, self-verify, never touch the platform, JSON-only output) but **not** the run's specifics — the spawn prompt is still self-contained per the list below.
 
@@ -214,6 +247,7 @@ Subagents **never** interact with the user or with GitLab/GitHub — no question
 - the absolute path(s) of its rule file(s) — the agent reads and applies **only** those, bullet by bullet;
 - the **pre-scan hits for its rule file(s)** as `file:line:text`, which it must each either raise as a finding or explicitly dismiss with a reason — no hit may go unmentioned in its result;
 - the repo root, `HEAD_SHA`, and the change title/description for intent context;
+- **for the device-runtime dimension only** — the three build-target facts resolved in Step 2 (real transpile target with the `file:line` it came from, the ES gate and its asserted level or `none`, and polyfill coverage). Resolve them **once in the main context**, not per agent; the agent judges every syntax and lib-API hit against them;
 - the finding-capture rules from "For each finding" below (diff position with line types, fix delivery, AI-fix prompt content rules);
 - the **self-verification requirement**: before returning, re-read the full current file (not just the hunk) and relevant callers for every candidate finding; drop what wider context already handles; downgrade overstated severity;
 - the output contract below.
@@ -466,7 +500,10 @@ comment or a report entry to match the style below. Layout:
 
 **Coverage:** one compact line naming **every** dimension applicable per Step 2, each with `clean`, a finding count, or `not reviewed` + reason — in **both** execution modes, so a small change is auditable exactly like a large one. End it with the pre-scan tally. A dimension that is silently absent is the failure this line exists to prevent.
 
-`Correctness ✓ · Security ✓ · Docs ✓ · TypeScript (2) · Device runtime — not reviewed (subagent failed twice) · pre-scan: 7 hits → 2 raised, 5 dismissed`
+`Correctness ✓ · Security ✓ · Docs ✓ · TypeScript (2) · Device runtime (1, target swc es5) · Platform scripts ✓ · pre-scan: 7 hits → 2 raised, 5 dismissed`
+
+When the device dimension ran, name the resolved build target in its entry as above — a device
+review judged against an unstated target is not auditable.
 
 **Report:** the `REPORT_URL` from 4.4.a **in full and unabbreviated** — this line is mandatory on every
 run — plus the `INDEX_URL` for the full archive:

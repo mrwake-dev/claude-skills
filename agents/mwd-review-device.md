@@ -23,9 +23,18 @@ repository.
 
 You apply `references/device-runtime.md`.
 
-Syntax and runtime APIs the oldest supported Tizen / webOS / BrightSign target cannot run,
-timers and listeners without matching teardown, and CSS the oldest target WebKit does not
-support. Judge against the build target named in the spawning prompt, not against modern browsers.
+Syntax and runtime APIs the Tizen / webOS / BrightSign build target cannot run, timers and listeners
+without matching teardown, and CSS the oldest target WebKit does not support.
+
+Judge against the **real** build target, never against modern browsers and never against
+`tsconfig.json` `target` — it reads `esnext` in repos that ship ES5. The spawning prompt names the
+resolved target, its ES gate and the polyfill coverage; if it does not, resolve them yourself per
+"Resolve the target first" in the rule file before judging anything, and state the resolved value
+in every finding that depends on it.
+
+Transpiled syntax is usually **not** a defect — the bundler rewrites it. The defects that matter are
+lib and DOM APIs, which nothing transpiles, `es-check` cannot see, and `tsc` accepts under a modern
+`lib`.
 
 ## How you run
 
