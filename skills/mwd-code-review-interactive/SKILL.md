@@ -1,23 +1,29 @@
 ---
 name: mwd-code-review-interactive
-description: Interactive code review on a GitLab merge request or GitHub pull request — generate feedback, confirm with the user which findings to post, post approved ones as inline diff comments via glab or gh (auto-detected from the repo URL), and write an HTML report into a persistent review archive. Use when the user asks to interactively review an MR/PR and post comments.
-argument-hint: "[merge-request-or-pull-request-url]"
+description: Interactive code review on a GitLab merge request or GitHub pull request — generate feedback, confirm with the user which findings to post, post approved ones as inline diff comments via glab or gh (auto-detected from the repo URL), and write an HTML report into a persistent review archive. Pass `local` instead of a URL to review the current branch from the local checkout with no platform access and nothing posted. Use when the user asks to interactively review an MR/PR and post comments, or to review their working branch locally.
+argument-hint: "[merge-request-or-pull-request-url|local]"
 disable-model-invocation: true
 ---
 
 # Interactive Code Review for GitLab MRs & GitHub PRs
 
-Perform an **interactive** code review on the merge request / pull request at $ARGUMENTS. Generate
-feedback exactly as a normal review, then confirm with the user which findings to post and post the
-approved ones as **inline diff comments**. Rejected or un-postable findings stay in a short final chat
-summary — nothing else is written to the platform. Every run also writes an HTML report of the whole
-review into a persistent local archive; that report, not the chat summary, carries the full detail of
-each finding.
+Perform an **interactive** code review on $ARGUMENTS. Generate feedback exactly as a normal review,
+then confirm with the user which findings to post and post the approved ones as **inline diff
+comments**. Rejected or un-postable findings stay in a short final chat summary — nothing else is
+written to the platform. Every run also writes an HTML report of the whole review into a persistent
+local archive; that report, not the chat summary, carries the full detail of each finding.
+
+`$ARGUMENTS` selects one of **two modes**, and Step 0 resolves which:
+
+| `$ARGUMENTS`                | Mode      | Change under review                        | Platform access                     |
+|:----------------------------|:----------|:-------------------------------------------|:-------------------------------------|
+| an MR/PR URL                | **Remote** | the merge request / pull request at that URL | reads the change, posts approved findings |
+| the literal word `local`    | **Local**  | the current branch in the working directory  | **none — nothing is read or posted**  |
 
 The skill supports **both GitLab (via `glab`) and GitHub (via `gh`)**. The review logic (Steps 2–3)
-is identical on both; only the fetch (Step 1) and post (Step 4.3) plumbing differs, and that lives in
-a per-platform reference file. Throughout this document, **the change** means the MR or PR under
-review.
+is identical on both and identical in Local mode; only the fetch (Step 1) and post (Step 4.3)
+plumbing differs, and that lives in a per-platform reference file. Throughout this document, **the
+change** means the MR or PR under review in Remote mode, and the branch under review in Local mode.
 
 ## Workflow
 
@@ -32,10 +38,18 @@ fast if a tool is missing. Always call the resolved `"$GLAB"` / `"$GH"` / `"$JQ"
 (`node "$SKILL_DIR/scripts/render-report.js" …`). If the script "doesn't exist", you are looking in the
 project directory instead of the skill directory.
 
-### Step 0: Detect the platform
+### Step 0: Resolve the mode, then the platform
 
-Look at the host in the change URL and pick the platform — this decides which CLI and which reference
-file the rest of the run uses:
+**Mode first.** If `$ARGUMENTS` is the word `local` (case-insensitive, optionally followed by a base
+ref — see Step 1), the run is in **Local mode**: skip the rest of this step entirely, load no platform
+reference, and go to Step 1's Local branch. Local mode makes **no network calls and no platform calls
+at all** — there is no URL, so there is nothing to read from and nothing to post to.
+
+If `$ARGUMENTS` is empty, ask which the user wants rather than guessing; do not silently default to
+either mode.
+
+**Otherwise the argument is a URL and the run is in Remote mode.** Look at the host in the change URL
+and pick the platform — this decides which CLI and which reference file the rest of the run uses:
 
 | URL host | Platform | CLI | Terminology | Plumbing reference |
 |:---------|:---------|:----|:------------|:-------------------|
@@ -48,7 +62,9 @@ matching platform reference now** — Steps 1 and 4.3 below delegate all the con
 commands to it. Confirm the CLI is authenticated (`gh auth status` / `glab auth status`) if a fetch
 fails with an auth error.
 
-### Step 1: Fetch the change details
+### Step 1: Get the change details
+
+#### Remote mode
 
 Parse the URL and fetch the metadata, diff, commits, existing inline comments, and positioning data
 using the **fetch recipe in the platform reference you loaded in Step 0** (§"Step 1"). The reference
@@ -76,6 +92,55 @@ named in the Step 4.4 executive summary.
 those are findings posted by a previous run of this skill — and note human-raised threads plus their
 resolved state. The Step 3 verification pass uses this to avoid re-raising anything already on the
 change.
+
+#### Local mode
+
+Build the same inputs from the working directory with `git` alone — no `glab`, no `gh`, no network.
+The base is the merge-base with the repo's default branch, or the ref the user named as
+`local <base-ref>`:
+
+```bash
+git rev-parse --is-inside-work-tree >/dev/null || { echo "not a git repo"; exit 1; }
+BASE_REF="<the ref after 'local', if the user gave one>"
+if [ -z "$BASE_REF" ]; then
+  BASE_REF="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)"    # e.g. origin/main
+  [ -n "$BASE_REF" ] || for c in origin/main origin/master main master; do
+    git rev-parse --verify --quiet "$c" >/dev/null && { BASE_REF="$c"; break; }
+  done
+fi
+[ -n "$BASE_REF" ] || { echo "cannot determine a base ref — pass one as 'local <base-ref>'"; exit 1; }
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+HEAD_SHA="$(git rev-parse HEAD)"
+MERGE_BASE="$(git merge-base "$BASE_REF" HEAD)" || { echo "no merge base with $BASE_REF"; exit 1; }
+DIFF="/tmp/local-$(printf '%s' "$BRANCH" | tr '/' '-')-$(git rev-parse --short HEAD).diff"
+git diff "$MERGE_BASE" HEAD > "$DIFF"
+wc -l "$DIFF"
+git log --format='%h %an %s' "$MERGE_BASE"..HEAD      # commit history + intent
+git status --porcelain                                 # uncommitted work, see below
+```
+
+Stop and report rather than reviewing nothing if the diff is empty — HEAD is at the base, or the
+user is on the default branch itself and meant to name a different one.
+
+**Uncommitted changes.** The diff above covers committed work only. If `git status --porcelain` is
+non-empty, say so and ask whether to include the working tree (`git diff "$MERGE_BASE"` picks up
+unstaged edits as well) before continuing — do not silently review a stale snapshot of files the user
+has since edited.
+
+The Step 1 outputs map like this; the rest of the workflow is unchanged because it consumes these,
+not the platform:
+
+| Remote-mode input        | Local-mode equivalent                                                          |
+|:--------------------------|:--------------------------------------------------------------------------------|
+| Metadata                 | branch name as the title, `git log -1 --format='%an'` as the author; no labels, no state |
+| Diff temp file           | `/tmp/local-<branch>-<short-sha>.diff` as above                                |
+| Commit history           | `git log "$MERGE_BASE"..HEAD` — also the **intent context** a description would give |
+| Existing inline comments | none — **re-run awareness does not apply**, so nothing is ever "already raised" |
+| Positioning data         | not needed; nothing is posted. Findings still carry `file:line` for the report |
+| CI status                | none — report it as `n/a (local)` in the executive summary                     |
+
+Everything from here to Step 4.1 is identical to Remote mode. **Steps 4.2 and 4.3 do not run in Local
+mode** — see the guard on each.
 
 ### Step 2: Contextual Analysis
 
@@ -127,7 +192,7 @@ Flatten the saved diff into one `file:new_line:added_text` record per added line
 then runs against that one file, and each hit already carries the new-side anchor data Step 4 needs:
 
 ```bash
-DIFF=/tmp/mr-<iid>.diff                  # or /tmp/pr-<number>.diff
+DIFF=/tmp/mr-<iid>.diff                  # or /tmp/pr-<number>.diff, or /tmp/local-<branch>-<sha>.diff
 ADDED="${DIFF%.diff}.added"
 awk '
   /^diff --git/ || /^index / || /^old mode/ || /^new mode/ { next }
@@ -320,6 +385,9 @@ Positive "what looks good" notes are review-only — never posting candidates.
 
 List every actionable finding in chat using its Step 3 ID so the user can decide what to post. Include the location and a short summary; also show the proposed inline-comment body (or at least its summary) so the user knows exactly what would be posted. Findings marked "already raised" are shown separately and are not selectable.
 
+**In Local mode** nothing can be posted, so present the list as the review result rather than a
+selection menu — drop the "proposed inline-comment body", then go straight to Step 4.4.
+
 ```
 [HIGH-1] <title> — src/foo.ts:42 — <one-line summary>
 [MED-1]  <title> — src/bar.ts:10 — <one-line summary>
@@ -327,6 +395,9 @@ List every actionable finding in chat using its Step 3 ID so the user can decide
 ```
 
 #### 4.2 Confirm (batch multi-select)
+
+> **Local mode: skip this step.** There is no platform to post to, so there is nothing to confirm.
+> Every finding is `kept`. Do not ask the user which findings to post — go to Step 4.4.
 
 Ask the user **once** which findings to post — do **not** confirm findings one at a time. Posting is strictly **opt-in**: only findings the user *explicitly selects* are posted.
 
@@ -338,6 +409,11 @@ Ask the user **once** which findings to post — do **not** confirm findings one
 Findings the user does not select — and any un-anchorable or already-raised findings — are **not** posted; they go to the chat summary in Step 4.4.
 
 #### 4.3 Post approved findings as inline comments
+
+> **Local mode: this step never runs.** Local mode has no URL, no platform reference and no
+> authenticated CLI target. Do not post, comment, approve, or write to GitLab/GitHub in any form —
+> not even if the repo has a remote you could resolve a project from, and not even if the user asks
+> mid-run. If they want findings posted, that is a new run against the MR/PR URL.
 
 **Precondition:** run this step only if the user explicitly selected **at least one** finding in Step 4.2. If the approved set is empty (nothing selected, or the user skipped/dismissed), post **nothing** and go straight to Step 4.4. Before posting, state exactly which findings (by ID) and how many you are about to post — e.g. "Posting 2 of 5 findings inline: HIGH-1, MED-2" — so the count is visible and never silently exceeds the selection.
 
@@ -466,6 +542,20 @@ ever done. **Read `references/report.md` now** for the full payload schema and t
 node "$SKILL_DIR/scripts/render-report.js" /tmp/mwd-review-report.json
 ```
 
+**In Local mode** the report is written exactly as always — it is local output, so nothing about it
+changes. Only the payload's identity fields come from git instead of the platform:
+
+- `"platform": "local"` — the renderer labels the page `Local`, titles it `Branch <name>` instead of
+  `MR !<id>`, and names the file `local-<branch>-<stamp>.html`;
+- `project` from the `origin` remote path, or the repo directory name when there is no remote;
+- `change_id` the **branch name** (that is what `local-` is prefixed to);
+- `host` from the remote host when there is one, so the archive still nests under the right project;
+  omit it with no remote and the renderer files the review under `local/`;
+- `branch` as `{ source: <branch>, target: <base-ref> }`;
+- **`url` omitted**, so the page renders no dead "Open MR/PR" link.
+
+Every finding's `status` is `kept`; `posted_url` and `thread_url` never appear.
+
 The script writes the report, appends it to the archive manifest, regenerates the archive index, and
 prints `REPORT`, `REPORT_URL`, `INDEX`, `INDEX_URL`, `REVIEWS`.
 
@@ -511,6 +601,11 @@ run — plus the `INDEX_URL` for the full archive:
 
 ### Posted inline (n)
 
+**Local mode: omit this section entirely** — nothing was posted, so an empty "Posted inline (0)"
+heading is noise. Every finding goes under "Kept in chat" with `local run` as the reason, and the
+executive summary opens by naming the branch and base (`Local review of feat/queue vs origin/master`)
+so the report is not mistaken for an MR review.
+
 | ID | Finding | Location | Category | Thread |
 |:---|:--------|:---------|:---------|:-------|
 | HIGH-1 | Unbounded retry loop | `src/api.ts:42` | DoS & Resource Exhaustion | [note](<mr-url>#note_1) |
@@ -550,3 +645,4 @@ task, not a licence to improve the file:
 - One CHANGELOG line per user-visible fix, under 120 characters. Never one per finding.
 - Report as a table: finding → `file:line` → what changed. No per-file narration.
 - Nothing is posted to GitLab/GitHub once the user has redirected — the review stays local.
+- In Local mode this is simply the expected next step, not a redirect: the same rules apply.

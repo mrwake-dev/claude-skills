@@ -50,10 +50,12 @@ optional and its section is skipped when absent. Unknown keys are ignored, so ex
 
 ```jsonc
 {
-  "platform": "gitlab",                   // "gitlab" | "github" — drives MR/PR wording and the file prefix
-  "host": "gitlab.com",                   // URL host; becomes an archive directory
+  "platform": "gitlab",                   // "gitlab" | "github" | "local" — drives the wording, the header
+                                          // pill and the file prefix (mr- / pr- / local-)
+  "host": "gitlab.com",                   // URL host; becomes an archive directory. Defaults per platform
+                                          // ("local" when the platform is local and no remote host is known)
   "project": "group/sub/repo",            // REQUIRED — becomes nested archive directories
-  "change_id": "482",                     // REQUIRED — MR iid or PR number
+  "change_id": "482",                     // REQUIRED — MR iid, PR number, or the branch name when local
   "url": "https://gitlab.com/group/sub/repo/-/merge_requests/482",
   "title": "Add offline playback queue",
   "author": "jkral",
@@ -130,7 +132,8 @@ optional and its section is skipped when absent. Unknown keys are ignored, so ex
 ## What the page contains
 
 A sticky top bar — back to the index, project/change breadcrumb, findings search, a direct **Open
-MR/PR** link (needs `url`), and a light/dark/auto theme toggle persisted in `localStorage` — then the
+MR/PR** link (needs `url`, so a local review has none), and a light/dark/auto theme toggle persisted
+in `localStorage` — then the
 header (project, change link, verdict, author, CI, branch, SHA, mode, labels, executive summary) ·
 severity/posted/size stat cards · coverage pills · severity filter · findings grouped into **Posted
 inline** / **Kept in chat** / **Already raised**, each with description, **one** fix block, and a

@@ -35,6 +35,14 @@ const STATUSES = {
 	kept: { label: 'Kept in chat', cls: 'kept' },
 	already_raised: { label: 'Already raised', cls: 'raised' },
 };
+// `local` is a review of a working branch: no change number, no URL, nothing posted.
+const PLATFORMS = {
+	github: { label: 'GitHub', noun: 'PR', prefix: 'pr', host: 'github.com', changeWord: '#', open: 'Open PR' },
+	gitlab: { label: 'GitLab', noun: 'MR', prefix: 'mr', host: 'gitlab.com', changeWord: '!', open: 'Open MR' },
+	local: { label: 'Local', noun: 'Branch', prefix: 'local', host: 'local', changeWord: '', open: 'Open' },
+};
+const isPlatform = (name) => Object.prototype.hasOwnProperty.call(PLATFORMS, name);
+const platformOf = (name) => (isPlatform(name) ? PLATFORMS[name] : PLATFORMS.gitlab);
 
 function esc(value) {
 	return String(value === null || value === undefined ? '' : value)
@@ -402,8 +410,11 @@ function renderFinding(finding) {
 }
 
 function renderReport(data, counts, indexHref) {
+	const platform = platformOf(data.platform);
 	const bareId = String(data.change_id || '?').replace(/^[!#]/, '');
-	const idLabel = data.platform === 'github' ? `PR #${bareId}` : `MR !${bareId}`;
+	const changeName =
+		data.platform === 'local' ? (data.branch && data.branch.source) || bareId : `${platform.changeWord}${bareId}`;
+	const idLabel = `${platform.noun} ${changeName}`;
 	const findings = Array.isArray(data.findings) ? data.findings : [];
 	const order = { CRITICAL: 0, HIGH: 1, MED: 2, LOW: 3 };
 	const sorted = findings
@@ -482,9 +493,9 @@ function renderReport(data, counts, indexHref) {
 		.join('');
 
 	const changeLink = data.url
-		? `<a class="nav-btn" href="${esc(data.url)}" target="_blank" rel="noreferrer">${esc(
-				data.platform === 'github' ? 'Open PR' : 'Open MR',
-			)} ${esc(idLabel.replace(/^(PR|MR) /, ''))} &#8599;</a>`
+		? `<a class="nav-btn" href="${esc(data.url)}" target="_blank" rel="noreferrer">${esc(platform.open)} ${esc(
+				changeName,
+			)} &#8599;</a>`
 		: '';
 
 	return `<!doctype html>
@@ -554,7 +565,7 @@ ${renderNav(indexHref, `<span class="mono">${esc(data.project || '')}</span> &mi
 
 <header class="card head">
   <div class="head-top">
-    <span class="pill accent">${esc(data.platform === 'github' ? 'GitHub' : 'GitLab')}</span>
+    <span class="pill accent">${esc(platform.label)}</span>
     <span class="crumb"><span class="mono">${esc(data.project || '')}</span> &middot; ${esc(idLabel)}</span>
     <span class="pill ${verdictClass(data.verdict)} verdict">${esc(data.verdict || 'NO VERDICT')}</span>
   </div>
@@ -683,7 +694,7 @@ function renderIndex(entries) {
 			})
 				.filter(Boolean)
 				.join(' ');
-			const changeWord = e.platform === 'github' ? '#' : '!';
+			const changeWord = platformOf(e.platform).changeWord;
 			const search = [e.project, e.title, e.author, e.verdict, e.change_id].join(' ').toLowerCase();
 			return `<tr data-search="${esc(search)}">
   <td class="nowrap small muted">${esc(formatDateTime(e.generated_at))}</td>
@@ -805,13 +816,13 @@ function main() {
 	if (!data || typeof data !== 'object') fail('payload must be a JSON object');
 	if (!data.project) fail('payload.project is required (e.g. "group/sub/repo")');
 	if (data.change_id === undefined || data.change_id === null || data.change_id === '') {
-		fail('payload.change_id is required (MR iid / PR number)');
+		fail('payload.change_id is required (MR iid / PR number, or the branch name when platform is "local")');
 	}
 
 	const now = new Date();
 	data.generated_at = data.generated_at || now.toISOString();
 	data.reviewed_at = data.reviewed_at || data.generated_at;
-	data.platform = data.platform === 'github' ? 'github' : 'gitlab';
+	data.platform = isPlatform(data.platform) ? data.platform : 'gitlab';
 
 	const findings = Array.isArray(data.findings) ? data.findings : [];
 	const counts = { critical: 0, high: 0, med: 0, low: 0, total: findings.length, posted: 0, kept: 0, already_raised: 0 };
@@ -822,9 +833,9 @@ function main() {
 		counts[st] += 1;
 	}
 
-	const host = safeSegment(data.host || (data.platform === 'github' ? 'github.com' : 'gitlab.com'), 'unknown-host');
+	const host = safeSegment(data.host || platformOf(data.platform).host, 'unknown-host');
 	const project = safeProjectPath(data.project, 'unknown-project');
-	const prefix = data.platform === 'github' ? 'pr' : 'mr';
+	const prefix = platformOf(data.platform).prefix;
 	const fileName = `${prefix}-${safeSegment(data.change_id, 'x')}-${stamp(now)}.html`;
 	const relReport = path.join('reports', host, project, fileName);
 	const absReport = path.join(outDir, relReport);

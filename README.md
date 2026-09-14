@@ -60,6 +60,11 @@ the platform from the repo URL. A run goes: fetch the diff → review it → con
 what you approved as inline diff comments, each with a one-click suggestion block and a copy-ready
 AI-fix prompt.
 
+Pass **`local`** instead of a URL to review your current branch straight from the working copy —
+`/mwd-code-review-interactive local`, or `local <base-ref>` to compare against something other than
+the default branch. The review itself is identical; there is no platform access at all, so nothing is
+fetched and nothing can be posted. You still get the findings in chat and the full HTML report.
+
 What it does beyond a plain review:
 
 - **Verifies every finding** against the full file and its callers before you ever see it, and drops
@@ -67,8 +72,8 @@ What it does beyond a plain review:
 - **Dedupes** against previous runs of the skill and against existing human threads, so nothing is
   raised twice.
 - **Fans out** on large changes — one subagent per dimension (correctness, security, docs, language,
-  device runtime), merged back in the main thread. Small changes are reviewed inline but walk the
-  same dimension list.
+  device runtime, platform scripts), merged back in the main thread. Small changes are reviewed
+  inline but walk the same dimension list.
 - **Pre-scans mechanically** with grep for absolute prohibitions (`any`, `React.FC`, bare `except:`,
   …); every hit becomes a finding or a recorded dismissal.
 - **Reports coverage** per dimension, so both modes are auditable the same way.
@@ -118,7 +123,7 @@ use `/mwd-review-report` to reopen one later.
 
 | Name                                                          | Description                                                                                                     |
 |:--------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------|
-| `/mwd-code-review-interactive [mr-or-pr-url]`                 | Review a GitLab MR or GitHub PR, confirm which findings to post, and post them as inline comments — see [Code review](#code-review). |
+| `/mwd-code-review-interactive [mr-or-pr-url \| local]`        | Review a GitLab MR or GitHub PR, confirm which findings to post, and post them as inline comments. `local` reviews the current branch from the working copy with no platform access and nothing posted — see [Code review](#code-review). |
 | `/mwd-resolve-mr-comments [mr-or-pr-url]`                     | Check every review comment against the current code, then apply the fixes you pick — working tree only, never commits or pushes. |
 | `/mwd-create-mr-description`                                  | Summarize the active branch's changes into a merge request description.                                           |
 | `/mwd-agent-rebase [target-branch] [--push] [--ci]`           | Rebase a branch onto its target, resolve mechanical conflicts, and verify with the project's own build. Force-push and pipeline watching are opt-in. |
