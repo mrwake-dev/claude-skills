@@ -1,7 +1,7 @@
 # Device Runtime Rules (signage players: Tizen, webOS, BrightSign, embedded Linux)
 
-Apply when the MR touches code that runs on signage devices. Triggers: imports from
-`@signageos/front-applet` / `@signageos/front-display`, `tizen` / `webos` / `brightsign` in paths or
+Apply when the MR touches code that runs on signage devices. Triggers: imports from a device-runtime
+SDK (`front-applet` / `front-display` packages), `tizen` / `webos` / `brightsign` in paths or
 configs, a browserslist targeting old Chromium/WebKit, applet or player-runtime directories. When
 unsure whether code ships to devices, apply these rules anyway — the failure modes below are
 invisible in CI and on developer machines, and only surface on the fleet.
@@ -24,7 +24,7 @@ nothing below exists:
 | `rspack.config.*` / `webpack.config.*` using `swc-loader`   | `jsc.target`                                                                 |
 | `.swcrc`                                                     | `jsc.target`                                                                 |
 | `webpack*.config.*` using `babel-loader`                    | `presets: ['@babel/preset-env', { targets }]` — **absent `targets` means ES5** |
-| `tools/build.mjs` driving `@signageos/lib-bundler`          | bundler default (esbuild `es6`, then swc down to `es5`)                      |
+| `tools/build.mjs` driving a `lib-bundler` wrapper           | bundler default (esbuild `es6`, then swc down to `es5`)                      |
 | `.browserslistrc` / `package.json` `browserslist`           | the query                                                                    |
 | `tsconfig.json` (last resort)                                | `target`                                                                     |
 
@@ -142,7 +142,7 @@ a player on day 4.
 ## Shared cross-service contracts
 
 - When the diff references a symbol from a shared package (e.g. `DeviceTelemetryType` from
-  `@signageos/common-types`), verify the version pinned in `package.json`/lockfile actually exports
+  `common-types`), verify the version pinned in `package.json`/lockfile actually exports
   it — a member added in a sibling MR does not exist until the dependency is bumped.
 - String literals that mirror a shared enum or a contract with another service (gateway endpoints,
   telemetry names, socket event names) are drift risks — require the shared constant/enum, or an

@@ -151,7 +151,7 @@ mode** — see the guard on each.
 - `references/device-runtime.md` — when the change touches code that runs on signage devices (Tizen, webOS, BrightSign, embedded Linux). Confirm mechanically rather than by impression, because a missed trigger silently drops both the dimension and its pre-scan:
 
   ```bash
-  grep -lE '@signageos/(front-applet|front-display|lib-bundler)' package.json                    # device runtime deps
+  grep -lE '"[^"]*(front-applet|front-display|lib-bundler)"' package.json                        # device runtime deps
   grep -E '^\+\+\+ ' "$DIFF" | grep -iE 'tizen|webos|brightsign|applet|player'                   # device paths in the diff
   ls .swcrc .browserslistrc rspack.config.* webpack*.config.* tools/build.mjs 2>/dev/null        # a bundler with a transpile target
   ```
