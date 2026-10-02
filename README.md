@@ -29,7 +29,6 @@ No MCP servers are required. The skills shell out to ordinary CLIs:
 | `glab`    | all GitLab MR work — fetching, diffing, posting inline comments                                   | `brew install glab`                                                                                |
 | `gh`      | the same on GitHub PRs (`/mwd-code-review-interactive`, `/mwd-resolve-mr-comments` auto-detect)  | `brew install gh`                                                                                  |
 | `jq`      | parsing GitLab/GitHub API responses in both platform reference files                             | `brew install jq`                                                                                  |
-| `python3` | the local preview server in `/sos-applet-redesign` only                                           | preinstalled on macOS                                                                              |
 
 The three forge/JSON CLIs install in one go:
 
@@ -114,7 +113,6 @@ use `/mwd-review-report` to reopen one later.
 |:-------------------|:--------------------------------------------------------------------------------------------------------------------------------------------------|
 | `code-explorer`    | Analyzes existing codebase features by tracing execution paths, mapping architecture layers, and documenting dependencies to inform new development. |
 | `code-simplifier`  | Simplifies and refines code for clarity, consistency, and maintainability while preserving behavior.                                              |
-| `mirek-hater`      | Joke agent — responds to any mention of Mirek/mireček with funny situations and a little bit of well-deserved hate.                               |
 | `mwd-review-*`     | Six single-dimension reviewers (`-correctness`, `-security`, `-docs`, `-language`, `-device`, `-platform-scripts`) that `/mwd-code-review-interactive` fans out to on large changes. Spawned by the skill, not invoked directly. |
 | `planner`          | Planning specialist for complex features, architectural changes, and refactoring — produces step-by-step implementation plans.                    |
 | `refactor-cleaner` | Dead-code cleanup and consolidation — runs analysis tools (knip, depcheck, ts-prune) to identify unused code and safely removes it.               |
@@ -131,5 +129,3 @@ use `/mwd-review-report` to reopen one later.
 | `/mwd-markdown-check [file.md] <language:english>`            | Check a Markdown file's grammar and readability.                                                                  |
 | `/mwd-node-security-audit`                                    | Audit a Node.js project for vulnerabilities, outdated and deprecated packages, and engine mismatches.             |
 | `/mwd-java-security-check`                                    | Audit a Java project against security standards and report how to fix what it finds.                              |
-| `/signage-cdp`                                                | Debug a signage device (Tizen, webOS, BrightSign, Android) live over Chrome DevTools Protocol.                     |
-| `/sos-applet-redesign`                                        | Redesign a signageOS applet onto the shared design system and prepare it for the Marketplace.                      |
