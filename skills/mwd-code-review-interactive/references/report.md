@@ -1,8 +1,54 @@
-# HTML report — payload contract & rendering
+# HTML report & final chat summary — Step 4.4
 
-Step 4.5 of the skill renders the review as a self-contained HTML page and appends it to a persistent
-archive. This file documents the payload you build and the script that consumes it. Read it only when
-you reach Step 4.5.
+Step 4.4 of the skill closes the run with two local outputs, in this order: the HTML report (4.4.a), so
+the summary can link to it, then the chat summary (4.4.b). Neither is posted to GitLab/GitHub. Read this
+file when you reach Step 4.4.
+
+## 4.4.a Write the HTML report
+
+Every run — including one where the user posted nothing — is recorded in a persistent local archive at
+`~/.claude/code-review-reports/`, so the reports build up into a log of every review this skill has
+ever done. The archive layout and the full payload schema are below.
+
+1. Assemble the payload and write it to `/tmp/mwd-review-report.json` **with the Write tool**, not a
+   heredoc — the values contain code, backticks, and newlines.
+2. It must contain **every** finding, not just the posted ones: `status` is `posted` (with
+   `posted_url`), `kept`, or `already_raised` (with `thread_url`). Carry `fix_code` and `ai_prompt`
+   verbatim — the report's copy button is how the user gets the prompt for a finding that was never
+   posted. `coverage` and `prescan` mirror the Coverage line below exactly.
+3. Render it:
+
+```bash
+node "$SKILL_DIR/scripts/render-report.js" /tmp/mwd-review-report.json
+```
+
+**In Local mode** the report is written exactly as always — it is local output, so nothing about it
+changes. Only the payload's identity fields come from git instead of the platform:
+
+- `"platform": "local"` — the renderer labels the page `Local`, titles it `Branch <name>` instead of
+  `MR !<id>`, and names the file `local-<branch>-<stamp>.html`;
+- `project` from the `origin` remote path, or the repo directory name when there is no remote;
+- `change_id` the **branch name** (that is what `local-` is prefixed to);
+- `host` from the remote host when there is one, so the archive still nests under the right project;
+  omit it with no remote and the renderer files the review under `local/`;
+- `branch` as `{ source: <branch>, target: <base-ref> }`;
+- **`url` omitted**, so the page renders no dead "Open MR/PR" link.
+
+Every finding's `status` is `kept`; `posted_url` and `thread_url` never appear.
+
+The script writes the report, appends it to the archive manifest, regenerates the archive index, and
+prints `REPORT`, `REPORT_URL`, `INDEX`, `INDEX_URL`, `REVIEWS`.
+
+**Always print `REPORT_URL` verbatim in the summary below — every run, without exception.** It is a
+clickable `file://` link to that run's own report, and it is the only place the full findings live now
+that the chat summary is a table. Never replace it with a pointer to `/mwd-review-report`, never
+paraphrase it as "the report was written to the archive", and never leave the user to go looking for
+it. Mentioning that `/mwd-review-report` reopens the newest report is fine **in addition to** the
+link, never instead of it. **Do not open the report in a browser** — print the link and let the user
+click.
+
+If rendering fails, say so in one line in the summary and carry on; a failed report never blocks the
+review output.
 
 ## Where reports live
 
@@ -144,3 +190,66 @@ Search and the severity filters compose — a finding shows only when it
 passes both. The index carries the same bar with its own search over project, title, author and
 verdict. Theme defaults to `prefers-color-scheme` until the toggle pins one, and the page prints
 cleanly with no external assets.
+
+## 4.4.b Final chat summary
+
+Close the run with a **short** summary **in chat only** — do not post it to GitLab/GitHub. The 4.4.a
+report already holds every finding in full (description, fix code, AI prompt), so this summary is a
+one-screen manifest that points at it, **never a second copy of the review**. Render it as normal
+markdown — no outer copy-paste fence, and no code blocks anywhere in it. Every finding appears exactly
+once, as a **single table row**, whether it was posted or kept.
+
+**This brevity is scoped to the chat summary and nothing else.** The inline comments posted in 4.3 and
+the HTML report written in 4.4.a stay **full-length** — full description, suggestion block, and the
+complete AI-fix prompt with its code snippet, exactly as those steps specify. Never trim a posted
+comment or a report entry to match the style below. Layout:
+
+### Executive Summary
+[2-3 sentences: overall assessment, number of critical/high findings, primary areas of concern. Include the CI status (e.g., "CI: failed") and, for large changes, name any files that could not be reviewed.]
+
+**Verdict:** [APPROVE | APPROVE WITH COMMENTS | REQUEST CHANGES]
+
+**Coverage:** one compact line naming **every** dimension applicable per Step 2, each with `clean`, a finding count, or `not reviewed` + reason — in **both** execution modes, so a small change is auditable exactly like a large one. End it with the pre-scan tally. A dimension that is silently absent is the failure this line exists to prevent.
+
+`Correctness ✓ · Security ✓ · Docs ✓ · TypeScript (2) · Device runtime (1, target swc es5) · Platform scripts ✓ · pre-scan: 7 hits → 2 raised, 5 dismissed`
+
+When the device dimension ran, name the resolved build target in its entry as above — a device
+review judged against an unstated target is not auditable.
+
+**Report:** the `REPORT_URL` from 4.4.a **in full and unabbreviated** — this line is mandatory on every
+run — plus the `INDEX_URL` for the full archive:
+`file:///Users/you/.claude/code-review-reports/reports/gitlab.com/group/repo/mr-482-20260809-141203.html` (all reviews: `…/index.html`)
+
+### Posted inline (n)
+
+**Local mode: omit this section entirely** — nothing was posted, so an empty "Posted inline (0)"
+heading is noise. Every finding goes under "Kept in chat" with `local run` as the reason, and the
+executive summary opens by naming the branch and base (`Local review of feat/queue vs origin/master`)
+so the report is not mistaken for an MR review.
+
+| ID | Finding | Location | Category | Thread |
+|:---|:--------|:---------|:---------|:-------|
+| HIGH-1 | Unbounded retry loop | `src/api.ts:42` | DoS & Resource Exhaustion | [note](https://gitlab.com/group/repo/-/merge_requests/482#note_1) |
+| MED-1 | Missing null guard | `src/ui.tsx:10` | Correctness | [note](https://gitlab.com/group/repo/-/merge_requests/482#note_2) — file-level fallback |
+
+### Kept in chat (n)
+
+| ID | Finding | Location | Category | Why not posted |
+|:---|:--------|:---------|:---------|:---------------|
+| MED-2 | Duplicate fetch per render | `src/a.ts:88` | Efficiency | not selected |
+| LOW-1 | Stale JSDoc on `parse()` | `src/b.ts:12` | Docs | un-anchorable |
+| LOW-2 | Unhandled reject path | `src/c.ts:5` | Correctness | already raised — [thread](https://gitlab.com/group/repo/-/merge_requests/482#note_3) |
+
+Table rules:
+- **ID** without brackets; severity is readable from the prefix, so no separate severity column.
+- **Finding** is a noun phrase of ≤ ~8 words — not a sentence, not the description.
+- Never add a Description or Fix column, and never inline a code snippet: that detail is what the report is for.
+- Skip an empty group's table entirely and say it in one line instead ("Nothing posted — all 3 findings kept in chat.").
+- A posted finding that needed a non-inline anchor notes the fallback level in the Thread cell, as above.
+
+### What looks good
+[One line, only if there is genuinely something to name. Omit the section otherwise.]
+
+**On demand only:** if the user then asks about a specific ID, print that one finding in full — file
+and line(s), category, description, and its `fix_code` in a fenced block. Never volunteer these blocks
+for the whole set; that is the long output this summary replaces.
