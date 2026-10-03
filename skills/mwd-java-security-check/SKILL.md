@@ -1,6 +1,6 @@
 ---
 name: mwd-java-security-check
-description: Review Java code for security vulnerabilities and best practices.
+description: Review Java code for security vulnerabilities and best practices. Use when the user asks to check, audit, or review a Java project for bugs or security issues.
 disable-model-invocation: true
 ---
 

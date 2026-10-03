@@ -1,7 +1,7 @@
 ---
 name: mwd-node-security-audit
 disable-model-invocation: true
-description: Audit a Node.js project's dependencies for security vulnerabilities, outdated packages, deprecated packages, peer dependency conflicts, and Node.js engine compatibility issues. Use this skill whenever the user mentions auditing a package.json, checking for vulnerabilities, finding outdated dependencies, running npm audit, upgrading packages, dependency health, security issues in node_modules, or anything related to evaluating the state of a JavaScript/TypeScript project's dependencies — even if they don't explicitly ask for an "audit". Produces a prioritized upgrade table and a written Markdown report.
+description: Audit a Node.js project's dependencies for security vulnerabilities, outdated packages, deprecated packages, peer dependency conflicts, and Node.js engine compatibility issues. Use when the user mentions auditing a package.json, checking for vulnerabilities, finding outdated dependencies, running npm audit, upgrading packages, dependency health, security issues in node_modules, or anything related to evaluating the state of a JavaScript/TypeScript project's dependencies — even if they don't explicitly ask for an "audit". Produces a prioritized upgrade table and a written Markdown report.
 ---
 
 # Dependency Audit

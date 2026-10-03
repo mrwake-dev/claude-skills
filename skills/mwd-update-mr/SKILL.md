@@ -1,6 +1,6 @@
 ---
 name: mwd-update-mr
-description: Write or update the title and description of the GitLab merge request or GitHub pull request for the current branch (via glab or gh, auto-detected from the git remote), using the whole branch diff plus this conversation's history — why the work was done, decisions taken, tests that actually ran, companion MRs opened. Merges into an existing description instead of overwriting it, offers to open a Draft MR/PR when none exists, and confirms before every platform write. Never commits or pushes. Use at the end of a finished task or when opening an MR/PR.
+description: Write or update the title and description of the GitLab merge request or GitHub pull request for the current branch (via glab or gh, auto-detected from the git remote), using the whole branch diff plus this conversation's history — why the work was done, decisions taken, tests that actually ran, companion MRs opened. Merges into an existing description instead of overwriting it, offers to open a Draft MR/PR when none exists, and confirms before every platform write. Never commits or pushes. Use when a task is finished or when opening an MR/PR.
 argument-hint: "[merge-request-or-pull-request-url]"
 disable-model-invocation: true
 ---
