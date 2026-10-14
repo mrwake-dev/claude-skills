@@ -129,3 +129,4 @@ use `/mwd-review-report` to reopen one later.
 | `/mwd-markdown-check [file.md] <language:english>`            | Check a Markdown file's grammar and readability.                                                                  |
 | `/mwd-node-security-audit`                                    | Audit a Node.js project for vulnerabilities, outdated and deprecated packages, and engine mismatches.             |
 | `/mwd-java-security-check`                                    | Audit a Java project against security standards and report how to fix what it finds.                              |
+| `/mwd-create-artifact [what to build]`                        | Build a dark (graphite + violet) page from what the session holds — a dashboard, a PR walkthrough, a comparison — and publish it as a private claude.ai artifact. If publishing is off, names the setting that blocks it and stops. |
