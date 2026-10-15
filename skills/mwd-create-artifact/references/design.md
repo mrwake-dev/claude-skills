@@ -12,17 +12,30 @@ Graphite surfaces, one violet accent, three data colours. Every page starts from
 
 ## 1. Tokens
 
-All colours live on `:root` in the template. Rules reference tokens, never raw hex, so one palette change re-skins the page. Every text pairing below passes WCAG AA.
+All colours live on `:root` in the template. Rules reference tokens, never raw hex, so one palette change re-skins the page. Every text pairing below passes WCAG AA, and `scripts/lint-page.sh` re-checks them against the page's actual `--bg`.
 
 | Token | Value | Use |
 |:--|:--|:--|
-| `--bg` | `#0b0b10` | Page background (plus one faint violet glow, top left) |
-| `--surface` / `--surface-2` | `#16161f` / `#1e1e2a` | Cards, tables, charts / table headers, inline code, hover |
+| `--bg` | `#0b0b10` (graphite) | Page background (plus one faint accent glow, top left). The only colour the `bg=` argument sets |
+| `--surface` / `--surface-2` | `--bg` + 6% / 10% of a violet-tinted white (≈ `#17171e` / `#1f1e28` on graphite) | Cards, tables, charts / table headers, inline code, hover |
 | `--border` / `--border-strong` | 8% / 14% white | Hairlines / inputs, timeline rail |
 | `--text` / `--muted` | `#ececf1` / `#9a9aab` | Body / labels, axes, secondary |
 | `--accent` | `#8b7cf6` | Links, eyebrow, the one thing to look at, series 1 |
 | `--c2` `--c3` `--c4` | cyan `#4cc9f0`, amber `#f5b84c`, rose `#f2708a` | Data series 2–4, in that order |
 | `--ok` `--warn` `--bad` | green `#5ad19a`, amber, rose | Status only: pass/fail, deltas, severity |
+
+`--accent-soft`, `--on-accent`, the glow and the accented card are derived too (`color-mix()` from `--accent` and `--bg`), so never hardcode them.
+
+Background presets for `bg=`. All four pass the contrast check:
+
+| Preset | `--bg` | Feel |
+|:--|:--|:--|
+| `graphite` (default) | `#0b0b10` | Neutral, slightly cool |
+| `navy` | `#0a0f1c` | Blue-black |
+| `oled` | `#000000` | True black; surfaces read as faint lifts |
+| `warm` | `#110e0b` | Brown-black |
+
+A custom hex must stay this dark. On graphite, the tightest pair is `--accent` on `--surface-2` at 4.95:1, and a background around `#1a1a24` already drops it below 4.5:1.
 
 - Violet is scarce on purpose: eyebrow, links, the highlighted series or card, primary button. When everything is violet, nothing stands out.
 - Status colours mean status. Don't use green or rose as decoration.

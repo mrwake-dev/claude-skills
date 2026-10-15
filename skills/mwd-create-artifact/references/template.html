@@ -11,15 +11,15 @@
 <style>
 :root {
 	--bg: #0b0b10;
-	--surface: #16161f;
-	--surface-2: #1e1e2a;
+	--surface: color-mix(in srgb, var(--bg), color-mix(in srgb, white 60%, var(--accent)) 6%);
+	--surface-2: color-mix(in srgb, var(--bg), color-mix(in srgb, white 60%, var(--accent)) 10%);
 	--border: rgba(255, 255, 255, 0.08);
 	--border-strong: rgba(255, 255, 255, 0.14);
 	--text: #ececf1;
 	--muted: #9a9aab;
 	--accent: #8b7cf6;
-	--accent-soft: rgba(139, 124, 246, 0.14);
-	--on-accent: #0b0b10;
+	--accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+	--on-accent: var(--bg);
 	--c1: #8b7cf6;
 	--c2: #4cc9f0;
 	--c3: #f5b84c;
@@ -43,7 +43,7 @@ html { -webkit-text-size-adjust: 100%; }
 body {
 	margin: 0;
 	background:
-		radial-gradient(1100px 480px at 15% -12%, rgba(139, 124, 246, 0.13), transparent 62%),
+		radial-gradient(1100px 480px at 15% -12%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 62%),
 		var(--bg);
 	background-attachment: fixed;
 	color: var(--text);
@@ -76,7 +76,7 @@ p { margin: 0 0 calc(var(--space) * 1.5); }
 /* Layout */
 .grid { display: grid; gap: calc(var(--space) * 2); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: calc(var(--space) * 2.5); }
-.card--accent { border-color: rgba(139, 124, 246, 0.45); box-shadow: 0 0 0 1px rgba(139, 124, 246, 0.15), 0 12px 40px -16px rgba(139, 124, 246, 0.35); }
+.card--accent { border-color: color-mix(in srgb, var(--accent) 45%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent), 0 12px 40px -16px color-mix(in srgb, var(--accent) 35%, transparent); }
 
 /* Stats */
 .stats { display: grid; gap: calc(var(--space) * 2); grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top: calc(var(--space) * 4); }
@@ -93,7 +93,7 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
 th { position: sticky; top: 0; background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; }
 tr:last-child td { border-bottom: 0; }
-tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
+tbody tr:hover td { background: color-mix(in srgb, white 2%, transparent); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Badges and callouts */
