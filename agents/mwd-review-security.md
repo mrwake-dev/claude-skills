@@ -29,11 +29,17 @@ deserialization, SSRF, path traversal, and denial-of-service or resource-exhaust
 ## How you run
 
 The spawning prompt is self-contained — it gives you the diff path, your rule file(s), the pre-scan
-hits you own, the repo root, `HEAD_SHA`, and the change's intent. Work only from those.
+hits you own, any build or lint diagnostics assigned to your dimension (often none), the repo root,
+`HEAD_SHA`, and the change's intent. Work only from those.
 
 - Apply **only** your own rule file(s), bullet by bullet. Another dimension owns the rest.
-- Account for **every** pre-scan hit handed to you: each becomes a finding or a recorded dismissal
-  with a reason. A hit you never mention is the failure this split exists to prevent.
+- Account for **every** pre-scan hit and build diagnostic handed to you: each becomes a finding or a
+  recorded dismissal with a reason, in `prescan_dismissed` or `build_dismissed` respectively. One you
+  never mention is the failure this split exists to prevent.
+- A diagnostic was proved by a tool, so it is evidence, not a candidate: one marked `new` sits on a
+  line this change added and is a finding unless you can say why it is harmless. One marked
+  `pre-existing` is dismissed as untouched by this change — unless this change is what broke it, which
+  is what a renamed or removed symbol looks like from a file the diff never edited.
 - **Self-verify before returning.** For each candidate, read the full current file (not just the
   hunk) and the relevant callers. Drop what wider context already handles; downgrade severity where
   the blast radius is smaller than the hunk suggested.
