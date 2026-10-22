@@ -1,7 +1,7 @@
 ---
 name: mwd-code-review-interactive
-description: Interactive code review on a GitLab merge request or GitHub pull request — generate feedback, confirm with the user which findings to post, and post approved ones as inline diff comments via glab or gh (auto-detected from the repo URL). Pass `local` instead of a URL to review the current branch from the local checkout with no platform access and nothing posted. Pass `artifact` to also publish the whole review as a private claude.ai page. Use when the user asks to interactively review an MR/PR and post comments, or to review their working branch locally.
-argument-hint: "[merge-request-or-pull-request-url|local] [artifact] [bg=preset|#hex]"
+description: Interactive code review on a GitLab merge request or GitHub pull request — generate feedback, confirm with the user which findings to post, and post approved ones as inline diff comments via glab or gh (auto-detected from the repo URL). Pass `local` instead of a URL to review the current branch from the local checkout with no platform access and nothing posted. Pass `build` to back the review with the repo's own compiler and linter, and `artifact` to also publish the whole review as a private claude.ai page. Use when the user asks to interactively review an MR/PR and post comments, or to review their working branch locally.
+argument-hint: "[merge-request-or-pull-request-url|local] [build] [artifact] [bg=preset|#hex]"
 disable-model-invocation: true
 ---
 
@@ -21,9 +21,16 @@ finding.
 | an MR/PR URL                | **Remote** | the merge request / pull request at that URL | reads the change, posts approved findings |
 | the literal word `local`    | **Local**  | the current branch in the working directory  | **none — nothing is read or posted**  |
 
-**`artifact` is a modifier, not a mode.** It may accompany either mode, as may `bg=<preset or #hex>`,
-which only picks the page background. Both are optional; neither changes the review itself, only
-whether Step 4.4 publishes a page.
+**`build` and `artifact` are modifiers, not modes.** Either may accompany either mode, as may
+`bg=<preset or #hex>`, which only picks the page background:
+
+| Token | Effect | Where |
+|:------|:-------|:------|
+| `build`    | runs the repo's own compiler and linter and feeds their diagnostics into the review as evidence | Step 3, `references/build-check.md` |
+| `artifact` | publishes the whole review as a private claude.ai page before the chat summary | Step 4.4, `references/report.md` |
+
+All are optional, and none of them changes what the review looks for — `build` adds evidence the
+dimensions then triage, `artifact` adds an output.
 
 The skill supports **both GitLab (via `glab`) and GitHub (via `gh`)**. The review logic (Steps 2–3)
 is identical on both and identical in Local mode; only the fetch (Step 1) and post (Step 4.3)
@@ -44,10 +51,10 @@ everything the page needs comes from there, and this skill ships no renderer of 
 
 ### Step 0: Resolve the modifiers, the mode, then the platform
 
-**Strip the modifiers first.** Take `artifact` and any `bg=…` token out of `$ARGUMENTS` and remember
-them for Step 4.4; neither is part of the mode. What remains — nothing, a URL, or `local [base-ref]` —
-is what the rest of this step reads. Getting this wrong is how `local artifact` ends up treating
-`artifact` as a base ref.
+**Strip the modifiers first.** Take `build`, `artifact` and any `bg=…` token out of `$ARGUMENTS` and
+remember them for Steps 3 and 4.4; none of them is part of the mode. What remains — nothing, a URL, or
+`local [base-ref]` — is what the rest of this step reads. Getting this wrong is how `local build` ends
+up treating `build` as a base ref.
 
 **Mode next.** If what remains is the word `local` (case-insensitive, optionally followed by a base
 ref — see Step 1), the run is in **Local mode**: skip the rest of this step entirely, load no platform
@@ -171,8 +178,8 @@ mode** — see the guard on each.
 - `references/platform-scripts.md` — when the diff touches platform scripting: `.sh`/`.bash`, `.ps1`/`.psm1`/`.psd1`, `.brs`, `.bat`/`.cmd`, `.cs`. These ship to the device or drive its install and recovery, and no language file covers them.
 
 `references/platform-gitlab.md`, `references/platform-github.md`, `references/pre-scan.md`,
-`references/posting.md`, and `references/report.md` are plumbing, not checklists — they are read in
-Steps 0, 3, 4.3 and 4.4, and never handed to a review subagent.
+`references/build-check.md`, `references/posting.md`, and `references/report.md` are plumbing, not
+checklists — they are read in Steps 0, 3, 4.3 and 4.4, and never handed to a review subagent.
 
 Then gather context:
 
@@ -203,6 +210,23 @@ the grep passes per rule file; run only the passes for the rule files detected i
 must be accounted for**: raise it as a finding or dismiss it with a one-line reason. Step 4.4 reports
 the counts.
 
+#### Build & lint evidence (only with the `build` token)
+
+Grep finds forbidden constructs; it does not find a type error, a floating promise, or an export whose
+consumers this change just broke. With the `build` token, the repo's **own** compiler and linter run
+once in the main context and their diagnostics become evidence the dimensions triage — each one proved
+by a tool rather than asserted by a reader, and each already carrying the `file:line` Step 4 posts on.
+
+**Read `references/build-check.md` now.** It holds the two gates (the checkout must actually be at the
+change; nothing is ever installed), the per-language commands, the join against the flattened diff that
+separates what this change introduced from what was already broken, and which dimension owns which
+diagnostic. The same accounting rule as the pre-scan applies: every diagnostic handed to a dimension is
+raised or dismissed with a reason, and the Step 4.4 coverage line names every tool — including the ones
+that did not run, and why.
+
+Without the token, skip this entirely: run no build, no typecheck and no linter, and leave the
+`build:` segment off the coverage line.
+
 #### Execution mode: inline or fan-out
 
 Pick based on the diff size measured in Step 1:
@@ -228,6 +252,7 @@ Subagents **never** interact with the user or with GitLab/GitHub — no question
 - the temp diff path (`/tmp/mr-<iid>.diff` or `/tmp/pr-<number>.diff`) — and for very large diffs, which file slices this dimension should read;
 - the absolute path(s) of its rule file(s) — the agent reads and applies **only** those, bullet by bullet;
 - the **pre-scan hits for its rule file(s)** as `file:line:text`, which it must each either raise as a finding or explicitly dismiss with a reason — no hit may go unmentioned in its result;
+- on a `build` run, the **build and lint diagnostics this dimension owns** (per the table in `references/build-check.md`), as `file:line:text` under that same accounting rule, each marked `new` or `pre-existing` from the join;
 - the repo root, `HEAD_SHA`, and the change title/description for intent context;
 - **for the device-runtime dimension only** — the three build-target facts resolved in Step 2 (real transpile target with the `file:line` it came from, the ES gate and its asserted level or `none`, and polyfill coverage). Resolve them **once in the main context**, not per agent; the agent judges every syntax and lib-API hit against them;
 - the finding-capture rules from "For each finding" below (diff position with line types, fix delivery, AI-fix prompt content rules);
@@ -256,13 +281,19 @@ Subagents **never** interact with the user or with GitLab/GitHub — no question
   }],
   "prescan_dismissed": [
     { "hit": "src/foo.ts:42:// accepts any shape", "reason": "match is inside a comment" }
+  ],
+  "build_dismissed": [
+    { "hit": "src/legacy.ts:12:error TS2322: Type 'string' is not assignable", "reason": "pre-existing, line not touched by this change" }
   ]
 }
 ```
 
+`build_dismissed` only appears on a `build` run, and is empty when the dimension raised every
+diagnostic it was given.
+
 **Main-loop merge (after all subagents return):**
 
-1. Parse each result. A subagent returning unparseable output gets **one** retry; if it still fails, report that dimension as "not reviewed" in the Step 4.4 executive summary — never silently drop it. Check that `findings` + `prescan_dismissed` together account for **every** pre-scan hit handed to that dimension; an unaccounted hit is triaged in the main loop rather than dropped.
+1. Parse each result. A subagent returning unparseable output gets **one** retry; if it still fails, report that dimension as "not reviewed" in the Step 4.4 executive summary — never silently drop it. Check that `findings` + `prescan_dismissed` (+ `build_dismissed` on a `build` run) together account for **every** pre-scan hit and build diagnostic handed to that dimension; an unaccounted hit is triaged in the main loop rather than dropped.
 2. **Dedupe across dimensions** — overlapping rules produce near-duplicates: same file + same/adjacent lines + substantively the same issue → merge into one finding, keeping the highest severity and the most complete fix.
 3. **Dedupe against the change** — existing inline comments from Step 1 (previous-run `<!-- mwd-review:` markers, human threads) turn matches into "already raised" (see Verification pass).
 4. Assign the final `[SEV-n]` IDs **only now**, after merging, so numbering is stable across 4.1, the posted comments, and 4.4.
@@ -290,7 +321,7 @@ Findings must survive scrutiny before the user ever sees them. In fan-out mode, 
 
 1. **Re-read the evidence** — for each candidate finding, read the full current file (not just the diff hunk) and, where the claim depends on it, the callers/consumers. Drop findings the wider context already handles (e.g., a "missing null check" validated upstream); downgrade severity where the blast radius is smaller than the hunk suggested. State, per surviving finding, the one line of evidence that rules out the "already handled upstream" explanation. A finding with no such line is dropped, not downgraded.
 2. **Dedupe against the change** — compare each finding with the inline comments fetched in Step 1. If the same issue was already raised — by a previous run of this skill (an `<!-- mwd-review:` marker on the same file and substantively the same issue, even if the line shifted) or by a human reviewer — it is **not a posting candidate**: keep it for the chat summary, marked "already raised", with a link to the existing thread.
-3. **Close out the pre-scan and the dimension list** — every mechanical pre-scan hit is now either a finding or a recorded dismissal with a reason, and every dimension applicable per Step 2 has an outcome (`clean` / n findings / `not reviewed` + why). Resolve any gap here, not by omission: an unreviewed dimension or a vanished hit must reach the Step 4.4 coverage line as such.
+3. **Close out the pre-scan, the build evidence and the dimension list** — every mechanical pre-scan hit and, on a `build` run, every diagnostic is now either a finding or a recorded dismissal with a reason; every dimension applicable per Step 2 has an outcome (`clean` / n findings / `not reviewed` + why); and every build tool has one (`clean` / counts / `not run` + why). Resolve any gap here, not by omission: an unreviewed dimension, a tool that quietly did not run, or a vanished hit must reach the Step 4.4 coverage line as such.
 
 Positive "what looks good" notes are review-only — never posting candidates.
 
