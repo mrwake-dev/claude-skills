@@ -98,9 +98,8 @@ reference's fallback ladder (alternate anchor → file-level comment → ask the
 downgrade an inline-only finding to a plain comment without asking.
 
 **Clean up** the diff temp files after all inline comments are posted (use whichever names Step 1
-created). Do this **after** Step 4.4's report payload is written, or simply leave it to the end of the
-run — nothing below needs the diff:
+created). Leave it to the end of the run — nothing below needs the diff:
 
 ```bash
-rm -f /tmp/mr-inline-comment.json /tmp/pr-inline-comment.json /tmp/mr-*.diff /tmp/pr-*.diff /tmp/mr-*.added /tmp/pr-*.added /tmp/mwd-review-report.json
+rm -f /tmp/mr-inline-comment.json /tmp/pr-inline-comment.json /tmp/mr-*.diff /tmp/pr-*.diff /tmp/mr-*.added /tmp/pr-*.added
 ```

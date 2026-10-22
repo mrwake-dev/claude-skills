@@ -4,19 +4,21 @@ A collection of custom skills, agents, and slash commands for Claude Code — re
 
 ## Installation
 
-Clone the repo, then symlink the three directories into `~/.claude`:
+Clone the repo, then symlink both directories into `~/.claude`:
 
 ```sh
 REPO=~/Documents/develop/mrwake-dev/claude-skills   # wherever you cloned it
 
-ln -s "$REPO/skills"   ~/.claude/skills
-ln -s "$REPO/agents"   ~/.claude/agents
-ln -s "$REPO/commands" ~/.claude/commands
+ln -s "$REPO/skills" ~/.claude/skills
+ln -s "$REPO/agents" ~/.claude/agents
 ```
 
-If any of those already exist as real directories, move them aside first — `ln -s` into an existing
+If either already exists as a real directory, move it aside first — `ln -s` into an existing
 directory silently creates `~/.claude/skills/skills` instead of failing. Check with
-`ls -la ~/.claude | grep -E 'skills|agents|commands'`; each should be a `->` symlink to this repo.
+`ls -la ~/.claude | grep -E 'skills|agents'`; each should be a `->` symlink to this repo.
+
+`/mwd-code-review-interactive` builds its report page from `/mwd-create-artifact`, so keep both skills
+installed — it resolves the sibling directory under `skills/`.
 
 ## Prerequisites
 
@@ -25,7 +27,7 @@ No MCP servers are required. The skills shell out to ordinary CLIs:
 | Tool      | Needed for                                                                                      | Install                                                                                          |
 |:----------|:------------------------------------------------------------------------------------------------|:-------------------------------------------------------------------------------------------------|
 | `git`     | every git-based skill                                                                            | preinstalled                                                                                       |
-| `node`    | the HTML report renderer, the report opener, and the Node audit scripts                          | [nodejs.org/download](https://nodejs.org/en/download) — or [nvm](https://github.com/nvm-sh/nvm), any current version |
+| `node`    | the Node audit scripts                                                                           | [nodejs.org/download](https://nodejs.org/en/download) — or [nvm](https://github.com/nvm-sh/nvm), any current version |
 | `glab`    | all GitLab MR work — fetching, diffing, posting inline comments                                   | `brew install glab`                                                                                |
 | `gh`      | the same on GitHub PRs (`/mwd-code-review-interactive`, `/mwd-resolve-mr-comments`, `/mwd-update-mr` auto-detect) | `brew install gh`                                                                                  |
 | `jq`      | parsing GitLab/GitHub API responses in both platform reference files                             | `brew install jq`                                                                                  |
@@ -36,7 +38,7 @@ The three forge/JSON CLIs install in one go:
 brew install glab gh jq
 ```
 
-The report scripts have no npm dependencies, so whatever `node` your version manager already provides
+The audit scripts have no npm dependencies, so whatever `node` your version manager already provides
 is fine — there is no need to install a second one through Homebrew.
 
 Authenticate the two forge CLIs once:
@@ -62,7 +64,7 @@ AI-fix prompt.
 Pass **`local`** instead of a URL to review your current branch straight from the working copy —
 `/mwd-code-review-interactive local`, or `local <base-ref>` to compare against something other than
 the default branch. The review itself is identical; there is no platform access at all, so nothing is
-fetched and nothing can be posted. You still get the findings in chat and the full HTML report.
+fetched and nothing can be posted. You still get every finding in chat.
 
 What it does beyond a plain review:
 
@@ -81,31 +83,20 @@ Review checklists live in the skill's `references/`, one per language plus devic
 Tizen/webOS/BrightSign; the platform plumbing is split into `platform-gitlab.md` and
 `platform-github.md`.
 
-### Report archive
+### Report page
 
-Every run writes an HTML report outside any repository, so work repos stay clean:
+By default a run ends with the chat summary: every finding as one table row, with its location and
+what happened to it. Add **`artifact`** — `/mwd-code-review-interactive <url> artifact` — and the whole
+review is also published as a private claude.ai page before the summary, which then links it.
 
-```
-~/.claude/code-review-reports/
-├── index.html          # every review ever run, newest first — searchable
-├── reports.json        # manifest the index is built from
-└── reports/<host>/<project>/<mr-482-20260809-141203>.html
-```
+The page is the audit trail: findings that were posted, kept, and already raised, each with its fix
+code and a copy-ready AI prompt, plus per-dimension coverage, the pre-scan dismissals and the files
+that could not be reviewed. It is built from `/mwd-create-artifact`'s design system, so `bg=navy`,
+`oled`, `warm` or a dark hex works here too, and it stays private until you share it from the page
+header. Each run publishes its own page, so re-reviewing a change never overwrites an earlier review.
 
-Each report holds the full audit trail — findings that were posted, rejected, and already raised, with
-fix code, copy-ready AI prompts, per-dimension coverage, and the pre-scan dismissals. It carries a top
-bar with a search box, a light/dark toggle, a link straight to the MR/PR, and a link back to the
-index. Nothing is ever overwritten; re-reviewing the same MR appends a new dated entry. Override the
-location with `MWD_REVIEW_REPORTS_DIR`.
-
-Every run prints its report link in chat when it finishes. Reports are never opened automatically —
-use `/mwd-review-report` to reopen one later.
-
-## Commands
-
-| Name                                          | Description                                                                                                                                                     |
-|:----------------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `/mwd-review-report [query \| index \| #N]`    | Open a report from the code review archive in the default browser. No argument opens the newest; `index` opens the archive listing; `#N` picks by position; anything else matches on project, title, author, verdict, or MR/PR number. `--list` prints recent reviews instead of opening one. |
+Publishing has to be available in the session. If it isn't, the run says which setting blocks it and
+closes with the chat summary — a review is never held up by its report page.
 
 ## Agents
 
@@ -121,7 +112,7 @@ use `/mwd-review-report` to reopen one later.
 
 | Name                                                          | Description                                                                                                     |
 |:--------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------|
-| `/mwd-code-review-interactive [mr-or-pr-url \| local]`        | Review a GitLab MR or GitHub PR, confirm which findings to post, and post them as inline comments. `local` reviews the current branch from the working copy with no platform access and nothing posted — see [Code review](#code-review). |
+| `/mwd-code-review-interactive [mr-or-pr-url \| local] [artifact]` | Review a GitLab MR or GitHub PR, confirm which findings to post, and post them as inline comments. `local` reviews the current branch from the working copy with no platform access and nothing posted; `artifact` also publishes the whole review as a private claude.ai page — see [Code review](#code-review). |
 | `/mwd-resolve-mr-comments [mr-or-pr-url]`                     | Check every review comment against the current code, then apply the fixes you pick — working tree only, never commits or pushes. |
 | `/mwd-update-mr [mr-or-pr-url]`                               | Write or update the current branch's MR/PR title and description from the branch diff and this conversation — tests run, companion MRs, decisions. Merges into the existing description, confirms before posting, can open a Draft. |
 | `/mwd-agent-rebase [target-branch] [--push] [--ci]`           | Rebase a branch onto its target, resolve mechanical conflicts, and verify with the project's own build. Force-push and pipeline watching are opt-in. |

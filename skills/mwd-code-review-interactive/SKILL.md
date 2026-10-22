@@ -1,7 +1,7 @@
 ---
 name: mwd-code-review-interactive
-description: Interactive code review on a GitLab merge request or GitHub pull request — generate feedback, confirm with the user which findings to post, post approved ones as inline diff comments via glab or gh (auto-detected from the repo URL), and write an HTML report into a persistent review archive. Pass `local` instead of a URL to review the current branch from the local checkout with no platform access and nothing posted. Use when the user asks to interactively review an MR/PR and post comments, or to review their working branch locally.
-argument-hint: "[merge-request-or-pull-request-url|local]"
+description: Interactive code review on a GitLab merge request or GitHub pull request — generate feedback, confirm with the user which findings to post, and post approved ones as inline diff comments via glab or gh (auto-detected from the repo URL). Pass `local` instead of a URL to review the current branch from the local checkout with no platform access and nothing posted. Pass `artifact` to also publish the whole review as a private claude.ai page. Use when the user asks to interactively review an MR/PR and post comments, or to review their working branch locally.
+argument-hint: "[merge-request-or-pull-request-url|local] [artifact] [bg=preset|#hex]"
 disable-model-invocation: true
 ---
 
@@ -10,8 +10,9 @@ disable-model-invocation: true
 Perform an **interactive** code review on $ARGUMENTS. Generate feedback exactly as a normal review,
 then confirm with the user which findings to post and post the approved ones as **inline diff
 comments**. Rejected or un-postable findings stay in a short final chat summary — nothing else is
-written to the platform. Every run also writes an HTML report of the whole review into a persistent
-local archive; that report, not the chat summary, carries the full detail of each finding.
+written to the platform. By default that chat summary is the run's only record; pass the **`artifact`**
+token to also publish the whole review as a private claude.ai page carrying the full detail of each
+finding.
 
 `$ARGUMENTS` selects one of **two modes**, and Step 0 resolves which:
 
@@ -19,6 +20,10 @@ local archive; that report, not the chat summary, carries the full detail of eac
 |:----------------------------|:----------|:-------------------------------------------|:-------------------------------------|
 | an MR/PR URL                | **Remote** | the merge request / pull request at that URL | reads the change, posts approved findings |
 | the literal word `local`    | **Local**  | the current branch in the working directory  | **none — nothing is read or posted**  |
+
+**`artifact` is a modifier, not a mode.** It may accompany either mode, as may `bg=<preset or #hex>`,
+which only picks the page background. Both are optional; neither changes the review itself, only
+whether Step 4.4 publishes a page.
 
 The skill supports **both GitLab (via `glab`) and GitHub (via `gh`)**. The review logic (Steps 2–3)
 is identical on both and identical in Local mode; only the fetch (Step 1) and post (Step 4.3)
@@ -32,21 +37,25 @@ a fresh, minimally-initialized shell (no environment shared between blocks), so 
 tool paths up front via `command -v` with a fallback (`/opt/homebrew/bin/…`, `/usr/bin/jq`) and fails
 fast if a tool is missing. Always call the resolved `"$GLAB"` / `"$GH"` / `"$JQ"` variables.
 
-**Running the helper script:** Step 4.4.a invokes `scripts/render-report.js`, which lives next to this
-`SKILL.md` in the skill's installation directory — **not** in the user's project. Resolve
-`SKILL_DIR="$(dirname "<path-to-this-SKILL.md>")"` and call it by absolute path
-(`node "$SKILL_DIR/scripts/render-report.js" …`). If the script "doesn't exist", you are looking in the
-project directory instead of the skill directory.
+**Reusing the artifact skill:** on an `artifact` run, Step 4.4.a builds the page from the
+`mwd-create-artifact` skill's design system and scripts, which live in a **sibling** of this skill's
+installation directory — **not** in the user's project. `references/report.md` §a.2 resolves that path;
+everything the page needs comes from there, and this skill ships no renderer of its own.
 
-### Step 0: Resolve the mode, then the platform
+### Step 0: Resolve the modifiers, the mode, then the platform
 
-**Mode first.** If `$ARGUMENTS` is the word `local` (case-insensitive, optionally followed by a base
+**Strip the modifiers first.** Take `artifact` and any `bg=…` token out of `$ARGUMENTS` and remember
+them for Step 4.4; neither is part of the mode. What remains — nothing, a URL, or `local [base-ref]` —
+is what the rest of this step reads. Getting this wrong is how `local artifact` ends up treating
+`artifact` as a base ref.
+
+**Mode next.** If what remains is the word `local` (case-insensitive, optionally followed by a base
 ref — see Step 1), the run is in **Local mode**: skip the rest of this step entirely, load no platform
 reference, and go to Step 1's Local branch. Local mode makes **no network calls and no platform calls
 at all** — there is no URL, so there is nothing to read from and nothing to post to.
 
-If `$ARGUMENTS` is empty, ask which the user wants rather than guessing; do not silently default to
-either mode.
+If nothing remains, ask which mode the user wants rather than guessing; do not silently default to
+either.
 
 **Otherwise the argument is a URL and the run is in Remote mode.** Look at the host in the change URL
 and pick the platform — this decides which CLI and which reference file the rest of the run uses:
@@ -329,12 +338,13 @@ Post one comment per approved finding as an **inline diff comment** on the exact
 `references/posting.md` now** for the comment body format, the suggestion-block rules, body assembly,
 anchoring and cleanup. The API call itself is the platform reference's §"Step 4.3" recipe.
 
-#### 4.4 HTML report, then the final chat summary
+#### 4.4 Close the run: the chat summary, and an artifact report when asked
 
-Two outputs close the run, in this order: the **HTML report** (so the summary can link to it), then the
-**chat summary**. Both are local — neither is posted to GitLab/GitHub. **Read `references/report.md`
-now** and follow its 4.4.a section (write and render the report on every run, Local mode included) and
-its 4.4.b section (the one-screen chat summary, which always prints `REPORT_URL` verbatim).
+Every run ends with the **chat summary**. On a run that carried the `artifact` token, a **private
+claude.ai page** of the whole review is published first, so the summary can link it. Neither output is
+posted to GitLab/GitHub. **Read `references/report.md` now** and follow its 4.4.a section (the artifact
+page — skipped entirely without the token, and never replaced by a local file) and its 4.4.b section
+(the one-screen chat summary, in both modes and with or without the page).
 
 ---
 

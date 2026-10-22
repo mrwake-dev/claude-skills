@@ -1,208 +1,225 @@
-# HTML report & final chat summary — Step 4.4
+# Closing the run — Step 4.4
 
-Step 4.4 of the skill closes the run with two local outputs, in this order: the HTML report (4.4.a), so
-the summary can link to it, then the chat summary (4.4.b). Neither is posted to GitLab/GitHub. Read this
-file when you reach Step 4.4.
+Step 4.4 closes every run with the **chat summary** (4.4.b). When `$ARGUMENTS` carried the `artifact`
+token, it first builds and publishes the full review as a **private claude.ai page** (4.4.a), so the
+summary can link it. Nothing in this file is ever posted to GitLab/GitHub. Read this file when you
+reach Step 4.4.
 
-## 4.4.a Write the HTML report
+**Without the `artifact` token there is no report page** — go straight to 4.4.b. Do not write an HTML
+file locally, do not write a Markdown report, and do not offer either as a substitute: the chat summary
+is the whole output of a run without the token.
 
-Every run — including one where the user posted nothing — is recorded in a persistent local archive at
-`~/.claude/code-review-reports/`, so the reports build up into a log of every review this skill has
-ever done. The archive layout and the full payload schema are below.
+## 4.4.a Artifact report (only when `artifact` was passed)
 
-1. Assemble the payload and write it to `/tmp/mwd-review-report.json` **with the Write tool**, not a
-   heredoc — the values contain code, backticks, and newlines.
-2. It must contain **every** finding, not just the posted ones: `status` is `posted` (with
-   `posted_url`), `kept`, or `already_raised` (with `thread_url`). Carry `fix_code` and `ai_prompt`
-   verbatim — the report's copy button is how the user gets the prompt for a finding that was never
-   posted. `coverage` and `prescan` mirror the Coverage line below exactly.
-3. Render it:
+The page is the audit log of the run: every finding, posted or not, with its fix code and its full
+AI-fix prompt. It reuses the `mwd-create-artifact` skill's design system — same tokens, same
+components — so a review page looks like every other artifact from these skills.
 
-```bash
-node "$SKILL_DIR/scripts/render-report.js" /tmp/mwd-review-report.json
-```
+### a.1 Can this session publish?
 
-**In Local mode** the report is written exactly as always — it is local output, so nothing about it
-changes. Only the payload's identity fields come from git instead of the platform:
+The **Artifact tool** is the only reliable signal. If it is in your tool list, or `ToolSearch`
+`select:Artifact` loads it, continue. That one lookup settles it — do not go looking for other
+publishing tools.
 
-- `"platform": "local"` — the renderer labels the page `Local`, titles it `Branch <name>` instead of
-  `MR !<id>`, and names the file `local-<branch>-<stamp>.html`;
-- `project` from the `origin` remote path, or the repo directory name when there is no remote;
-- `change_id` the **branch name** (that is what `local-` is prefixed to);
-- `host` from the remote host when there is one, so the archive still nests under the right project;
-  omit it with no remote and the renderer files the review under `local/`;
-- `branch` as `{ source: <branch>, target: <base-ref> }`;
-- **`url` omitted**, so the page renders no dead "Open MR/PR" link.
-
-Every finding's `status` is `kept`; `posted_url` and `thread_url` never appear.
-
-The script writes the report, appends it to the archive manifest, regenerates the archive index, and
-prints `REPORT`, `REPORT_URL`, `INDEX`, `INDEX_URL`, `REVIEWS`.
-
-**Always print `REPORT_URL` verbatim in the summary below — every run, without exception.** It is a
-clickable `file://` link to that run's own report, and it is the only place the full findings live now
-that the chat summary is a table. Never replace it with a pointer to `/mwd-review-report`, never
-paraphrase it as "the report was written to the archive", and never leave the user to go looking for
-it. Mentioning that `/mwd-review-report` reopens the newest report is fine **in addition to** the
-link, never instead of it. **Do not open the report in a browser** — print the link and let the user
-click.
-
-If rendering fails, say so in one line in the summary and carry on; a failed report never blocks the
-review output.
-
-## Where reports live
-
-```
-~/.claude/code-review-reports/            # archive root ($MWD_REVIEW_REPORTS_DIR overrides it)
-├── index.html                            # regenerated every run — every review, newest first
-├── reports.json                          # manifest the index is built from
-└── reports/<host>/<project>/<id>-<stamp>.html
-```
-
-The root is deliberately **outside any repository**: reports never pollute a work repo, need no
-`.gitignore` entry, and one index accumulates every review across every project. Nothing is ever
-overwritten — re-reviewing the same MR appends a new dated entry, which is what makes the archive a
-log rather than a snapshot.
-
-## Rendering
+If it cannot be loaded, run the artifact skill's environment check (`$ARTIFACT_DIR` is resolved in
+a.2):
 
 ```bash
-node "$SKILL_DIR/scripts/render-report.js" /tmp/mwd-review-report.json
+bash "$ARTIFACT_DIR/scripts/check-artifact-env.sh" "$PWD"
 ```
 
-`$SKILL_DIR` is the directory holding this skill's `SKILL.md` (see "Running the helper script" in
-SKILL.md). Options: `--out-dir <dir>` to override the archive root; pass `-` instead of a file path to
-read the payload from stdin. The script has no dependencies and makes no network calls.
+Then say in **one or two lines** that the artifact report could not be published, quote the BLOCKER
+lines with their `file:line` and fix, and note that settings are read at startup so the fix only takes
+effect in a **new** session. Then **go to 4.4.b and close the run normally**. A report that cannot be
+published never blocks the review output — the findings are already in context, and the chat summary
+carries them. Do the same, in one line, if the publish call itself fails later.
 
-It prints the paths the Step 4.4 summary needs:
+### a.2 Resolve the artifact skill
 
+The two skills are installed side by side, so resolve the sibling directory rather than guessing a path:
+
+```bash
+SKILL_DIR="$(dirname "<path-to-this-skill's-SKILL.md>")"
+ARTIFACT_DIR="$(dirname "$SKILL_DIR")/mwd-create-artifact"
+[ -f "$ARTIFACT_DIR/references/template.html" ] ||
+	ARTIFACT_DIR="$(find "$HOME/.claude" -maxdepth 5 -type d -name mwd-create-artifact -print -quit 2>/dev/null)"
+[ -f "$ARTIFACT_DIR/references/template.html" ] || { echo "mwd-create-artifact not installed"; }
 ```
-REPORT      /Users/you/.claude/code-review-reports/reports/gitlab.com/group/repo/mr-482-20260809-141203.html
-REPORT_URL  file:///Users/you/.claude/code-review-reports/reports/gitlab.com/group/repo/mr-482-20260809-141203.html
-INDEX       /Users/you/.claude/code-review-reports/index.html
-INDEX_URL   file:///Users/you/.claude/code-review-reports/index.html
-REVIEWS     37
+
+If it is not installed, say so in one line and close with 4.4.b — same rule as a.1.
+
+### a.3 Build the page
+
+1. **Read `$ARTIFACT_DIR/references/design.md`** — it holds the token rules, the component markup, and
+   the "what makes it look cheap" list that this page follows.
+2. Copy the template to the page path:
+
+   ```bash
+   PAGE="${TMPDIR:-/tmp}/mwd-create-artifact/review-<mr|pr|local>-<id>-<YYYYmmdd-HHMMSS>.html"
+   mkdir -p "$(dirname "$PAGE")" && cp "$ARTIFACT_DIR/references/template.html" "$PAGE"
+   ```
+
+3. Fill it with the layout in a.4. Keep every `:root` token, delete nothing from it, and reference
+   tokens rather than raw colour values.
+4. **Background**: with no `bg=` in `$ARGUMENTS`, leave `--bg` as it is. With `bg=navy`, `oled`, `warm`
+   or `bg=#rrggbb`, set **only** `--bg` to that value from design.md §1; a.5 re-checks the contrast.
+
+### a.4 Layout
+
+Same report as the page this skill used to render locally, rebuilt from the artifact components. One
+page, in this order. Use in-page anchors — relative links do not resolve in the viewer.
+
+| Section | Markup |
+|:--|:--|
+| Header | `.eyebrow` = `<project> · <MR !482 / PR #17 / branch> · <GitLab / GitHub / local>`; `h1` = the change title (the branch name when local); `.lead` = the verdict in `<strong>` then the one-sentence assessment with its counts; `.meta` = verdict badge, author, reviewed-at, state, CI badge, `source → target`, 12-char head SHA, execution mode, labels as `.badge`s, and an `Open MR/PR ↗` link when there is a `url` |
+| Executive summary | The Step 4.4 prose as `<p>`s directly under the header, then "What looks good" as a `.callout` (omit the callout when there is nothing genuine to name) |
+| `.toc` | Pill nav to the sections below, when there are 4 or more |
+| `.stats` | One `.stat` per severity — Critical, High, Med, Low, all four even at zero — plus Posted, Files changed, and Lines as `+412 / −96` |
+| Coverage | One `.badge` per dimension from the Coverage line: `--ok` for `clean`, `--warn` for a finding count, `--bad` for `not reviewed` (with the reason in the badge text). Follow it with the pre-scan tally as one `.muted` line |
+| Findings | One `<section>` per status group, in this order and skipping any that is empty: **Posted inline**, **Kept in chat**, **Already raised**. Heading carries the count. Findings are ordered CRITICAL → HIGH → MED → LOW inside each group, as `.card`s in a `.findings` stack |
+| Mechanical pre-scan | Three `.stat` cards (hits, raised as findings, dismissed), then the dismissed hits in a `<details>` holding a `.table-wrap` table of hit → reason. When nothing was dismissed, one `.muted` line instead |
+| Not reviewed | A `.card` listing each file that could not be reviewed, in `<code>`. Omit the section when every file was reviewed |
+| `footer` | `Generated by /mwd-code-review-interactive`, the date, and the sources actually used: the change URL, the head SHA, and the dimensions applied |
+
+One finding card:
+
+```html
+<article class="card">
+	<div class="finding__head">
+		<span class="badge badge--bad">HIGH</span>
+		<h3>Unbounded retry queue grows without a cap</h3>
+		<span class="finding__id">HIGH-1</span>
+		<a class="badge badge--ok" href="https://…#note_1234567" target="_blank" rel="noreferrer">Posted inline ↗</a>
+	</div>
+	<p class="muted"><code>src/queue.ts:142</code> · DoS &amp; Resource Exhaustion</p>
+	<p>What is wrong and why it matters.</p>
+	<div class="block__label">Fix · posted as an inline suggestion</div>
+	<div class="code"><pre><span class="ln ln--del">-  return token;</span><span class="ln ln--add">+  return refresh(token);</span></pre></div>
+	<details class="prompt">
+		<summary>AI fix prompt<button class="btn" type="button" data-copy>Copy</button></summary>
+		<div class="code"><pre>…the prompt, verbatim…</pre></div>
+	</details>
+	<p class="muted">Anchor fallback used: file-level comment</p>
+</article>
 ```
 
-Do **not** open the report in a browser — print `REPORT_URL` and `INDEX_URL` in the summary and let the
-user click. The `/mwd-review-report` command (backed by `scripts/open-report.js` in this same
-directory) is how the user opens a report on demand, later, without re-running the review.
+Badge mapping, so severity and status read the same on every page:
 
-## Payload schema
+| Value | Badge |
+|:--|:--|
+| `CRITICAL`, `HIGH` | `badge--bad` |
+| `MED` | `badge--warn` |
+| `LOW` | `badge` |
+| status `posted` | `badge--ok`, wrapped in an `<a>` to the comment when there is one |
+| status `kept` | `badge` — the chat summary's reason (`not selected`, `un-anchorable`, `local run`) goes in the badge text |
+| status `already_raised` | `badge`, plus an `Existing thread ↗` link under the description |
 
-Write the payload to `/tmp/mwd-review-report.json` with the Write tool (not a heredoc — the values
-contain code, backticks, and newlines). Only `project` and `change_id` are required; every other key is
-optional and its section is skipped when absent. Unknown keys are ignored, so extra data is harmless.
+CRITICAL and HIGH share one colour because the system has three status colours, not four; the badge
+text is what distinguishes them. The old local report also carried a theme toggle, a findings search
+box and severity filters — the artifact is dark-only and static, so those are gone. Nothing else about
+the page changes.
 
-```jsonc
-{
-  "platform": "gitlab",                   // "gitlab" | "github" | "local" — drives the wording, the header
-                                          // pill and the file prefix (mr- / pr- / local-)
-  "host": "gitlab.com",                   // URL host; becomes an archive directory. Defaults per platform
-                                          // ("local" when the platform is local and no remote host is known)
-  "project": "group/sub/repo",            // REQUIRED — becomes nested archive directories
-  "change_id": "482",                     // REQUIRED — MR iid, PR number, or the branch name when local
-  "url": "https://gitlab.com/group/sub/repo/-/merge_requests/482",
-  "title": "Add offline playback queue",
-  "author": "jkral",
-  "state": "opened",
-  "labels": ["frontend", "needs-review"],
-  "ci_status": "failed",                  // rendered as a pass/fail/pending pill
-  "branch": { "source": "feat/queue", "target": "master" },
-  "head_sha": "9f3c1a2b8d7e…",            // truncated to 12 chars in the header
-  "reviewed_at": "2026-08-09T10:12:00Z",  // defaults to now
-  "mode": "fan-out",                      // "inline" | "fan-out" — the Step 3 execution mode
-  "verdict": "REQUEST CHANGES",           // APPROVE | APPROVE WITH COMMENTS | REQUEST CHANGES
-  "executive_summary": "…",               // the same prose as the Step 4.4 executive summary
-  "stats": { "files_changed": 11, "additions": 412, "deletions": 96 },
+**The review layout's own CSS.** Append exactly this after the template's styles — it is layout only,
+every value comes from a token, and it is the whole of what the review page adds:
 
-  // One entry per dimension applicable in Step 2 — the same list as the Coverage line.
-  "coverage": [
-    { "dimension": "Correctness", "status": "findings", "count": 2 },
-    { "dimension": "Security",    "status": "clean" },
-    { "dimension": "Device runtime", "status": "not_reviewed", "note": "subagent failed twice" }
-  ],
+```css
+.findings { display: grid; gap: calc(var(--space) * 2); }
+.finding__head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.finding__head h3 { flex: 1 1 260px; margin: 0; }
+.finding__id { color: var(--muted); font: 500 12px var(--font-mono); }
+.block__label { color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: 0.06em;
+                text-transform: uppercase; margin: calc(var(--space) * 2) 0 6px; }
+details.prompt > summary { display: flex; align-items: center; gap: var(--space); cursor: pointer;
+                           color: var(--muted); font-size: 13px; font-weight: 600; padding: 7px 10px;
+                           border: 1px dashed var(--border); border-radius: var(--radius-sm); }
+details.prompt > summary:hover { color: var(--accent); border-color: var(--accent); }
+details.prompt > summary [data-copy] { margin-left: auto; padding: 2px 10px; }
+details.prompt > .code { margin-top: calc(var(--space) * 1.5); }
+```
 
-  // The mechanical pre-scan tally. Every hit is either raised as a finding or listed here with a reason.
-  "prescan": {
-    "hits": 7,
-    "raised": 2,
-    "dismissed": [
-      { "hit": "src/queue.ts:88:// accepts any shape", "reason": "match is inside a comment" }
-    ]
-  },
+**The copy button.** The AI-fix prompt is the one thing a reader takes off the page, so each `<details>`
+gets one. The viewer's sandbox may block the clipboard, so selecting the text is the fallback:
 
-  // EVERY finding — posted, kept in chat, and already-raised alike.
-  "findings": [
-    {
-      "id": "HIGH-1",                     // the stable Step 3 ID
-      "severity": "HIGH",                 // CRITICAL | HIGH | MED | LOW
-      "title": "Unbounded retry queue grows without a cap",
-      "category": "DoS & Resource Exhaustion",
-      "file": "src/queue.ts",
-      "line": "142",                      // string or number; a range like "142-150" is fine
-      "status": "posted",                 // "posted" | "kept" | "already_raised"
-      "posted_url": "https://…#note_1234567",   // status "posted": the direct comment link
-      "thread_url": "https://…#note_1200001",   // status "already_raised": the existing thread
-      "fallback": "file-level comment",   // only when the inline anchor needed a fallback
-      "description": "What is wrong and why it matters.",
-      "suggestion": "…",                  // the suggestion posted to the platform; not rendered as its
-                                          // own block — it only labels the Fix block, and stands in
-                                          // for fix_code when that is absent
-      "fix_code": "…",                    // concrete code showing the fix — chat only shows it on request
-      "ai_prompt": "…"                    // the full AI-fix prompt, verbatim
-    }
-  ],
-
-  "unreviewed_files": ["src/vendor/legacy-bundle.js (generated, 8k lines)"],
-  "good": ["Retry backoff uses jitter — avoids thundering-herd reconnects."]
-}
+```html
+<script>
+document.addEventListener('click', function (e) {
+	var btn = e.target.closest('[data-copy]');
+	if (!btn) return;
+	e.preventDefault();
+	var pre = (btn.closest('details') || btn.closest('.card')).querySelector('pre');
+	if (!pre) return;
+	var done = function (label) { btn.textContent = label; setTimeout(function () { btn.textContent = 'Copy'; }, 1600); };
+	if (navigator.clipboard && navigator.clipboard.writeText) {
+		navigator.clipboard.writeText(pre.textContent).then(function () { done('Copied'); }, function () { select(pre); });
+	} else {
+		select(pre);
+	}
+	// Clipboard blocked: leave the block selected so Cmd+C works.
+	function select(node) {
+		var range = document.createRange();
+		range.selectNodeContents(node);
+		var sel = window.getSelection();
+		sel.removeAllRanges();
+		sel.addRange(range);
+		done('Press Cmd+C');
+	}
+});
+</script>
 ```
 
 ### Fidelity rules
 
-- **Every finding goes in**, including ones the user declined to post and ones already raised. The
-  report is the audit log; the platform only ever gets the approved subset.
-- `fix_code` and `ai_prompt` are copied **verbatim** from what Step 3 produced — the report's copy
-  button is how the user gets the prompt for a finding that was never posted.
-- `coverage` and `prescan` must match the Step 4.4 Coverage line exactly. A dimension missing here is
-  the same failure that line exists to prevent.
-- Newlines and backticks in code and prompts need no escaping beyond normal JSON; the renderer
-  HTML-escapes everything.
-- **Prose fields render inline markdown** — `executive_summary`, `description`, finding `title`,
-  `category`, `good[]`, coverage `note`, and dismissed `reason` support `` `code` ``, `**bold**`,
-  `_italic_`, `[text](https://…)`, and blank-line paragraphs. Write them as you would in chat; the
-  renderer escapes first and only then applies markdown, so no field can inject HTML. Fields not on
-  that list (`file`, `line`, `fallback` values, code blocks) are escaped verbatim.
+- **Every finding goes on the page**, including the ones the user declined to post and the ones
+  already raised. The platform only ever got the approved subset; this page is the full record.
+- `fix_code` and `ai_prompt` are reproduced **verbatim** from what Step 3 produced — the copy button is
+  how the user gets the prompt for a finding that was never posted. Strip the block's common
+  indentation so it reads flush, and change nothing else.
+- One fix block per finding. A `suggestion` is the same fix rewritten for the platform's one-click
+  apply, so it is not a second block: it only adds `· posted as an inline suggestion` to the label, and
+  stands in for `fix_code` when there is none.
+- Coverage and pre-scan numbers must match the 4.4.b Coverage line exactly. A dimension missing from
+  the page is the same failure that line exists to prevent.
+- **Escape code and prose yourself** — `&amp;`, `&lt;`, `&gt;` in every `<pre>`, `<code>`, diff line and
+  table cell. You are writing the HTML directly, so nothing escapes it for you.
+- Prose is written as **HTML**, not markdown: `<code>`, `<strong>`, `<em>`, `<a href>`, `<p>` per
+  paragraph. A stray `**bold**` renders as asterisks.
+- Real values only. A field you do not have is a row you omit, never a placeholder.
 
-## What the page contains
+### a.5 Check, publish, link
 
-A sticky top bar — back to the index, project/change breadcrumb, findings search, a direct **Open
-MR/PR** link (needs `url`, so a local review has none), and a light/dark/auto theme toggle persisted
-in `localStorage` — then the
-header (project, change link, verdict, author, CI, branch, SHA, mode, labels, executive summary) ·
-severity/posted/size stat cards · coverage pills · severity filter · findings grouped into **Posted
-inline** / **Kept in chat** / **Already raised**, each with description, **one** fix block, and a
-collapsible AI prompt with a copy button · pre-scan tally with the dismissed-hits table · files not
-reviewed. "What looks good" sits in the header under the executive summary. Code blocks have their
-common indentation stripped, so a suggestion carrying the file's own leading tabs still reads flush.
-Search and the severity filters compose — a finding shows only when it
-passes both. The index carries the same bar with its own search over project, title, author and
-verdict. Theme defaults to `prefers-color-scheme` until the toggle pins one, and the page prints
-cleanly with no external assets.
+```bash
+bash "$ARTIFACT_DIR/scripts/lint-page.sh" "$PAGE"
+```
+
+Fix every FAIL and run it again. REVIEW lines list colour literals outside `:root` — on this page they
+are allowed only inside a finding's code sample. If a custom `bg=` fails contrast, say which pair fails
+and fall back to the nearest preset rather than touching the other tokens.
+
+Then publish `$PAGE` with the **Artifact tool**: a title of at most 6 words (`Review MR !482`,
+`Review PR #17`, `Review feat/queue`), the icon `diff`, and a one-sentence description naming the
+verdict and the counts. Keep the returned URL for 4.4.b.
+
+The artifact is **private** until the user shares it from the page header — say so in one line, and do
+not change its audience. Each run publishes its own page, which keeps the archive property the local
+reports had: re-reviewing the same change never overwrites an earlier review. To put a re-review on the
+**same** URL instead, follow the "Updating" section of `$ARTIFACT_DIR/SKILL.md` and publish with `url`
+set.
 
 ## 4.4.b Final chat summary
 
-Close the run with a **short** summary **in chat only** — do not post it to GitLab/GitHub. The 4.4.a
-report already holds every finding in full (description, fix code, AI prompt), so this summary is a
-one-screen manifest that points at it, **never a second copy of the review**. Render it as normal
-markdown — no outer copy-paste fence, and no code blocks anywhere in it. Every finding appears exactly
-once, as a **single table row**, whether it was posted or kept.
+Close the run with a **short** summary **in chat only** — do not post it to GitLab/GitHub. Render it as
+normal markdown — no outer copy-paste fence, and no code blocks anywhere in it. Every finding appears
+exactly once, as a **single table row**, whether it was posted or kept.
+
+When 4.4.a ran, the page holds every finding in full and this summary is a one-screen manifest that
+points at it. **Without the `artifact` token this summary is the only record of the run**, so it carries
+the same table either way — brief, but complete: every finding, its location, and what happened to it.
+The user can ask for any single finding in full afterwards (see the end of this file).
 
 **This brevity is scoped to the chat summary and nothing else.** The inline comments posted in 4.3 and
-the HTML report written in 4.4.a stay **full-length** — full description, suggestion block, and the
+the artifact page built in 4.4.a stay **full-length** — full description, suggestion block, and the
 complete AI-fix prompt with its code snippet, exactly as those steps specify. Never trim a posted
-comment or a report entry to match the style below. Layout:
+comment or a page entry to match the style below. Layout:
 
 ### Executive Summary
 [2-3 sentences: overall assessment, number of critical/high findings, primary areas of concern. Include the CI status (e.g., "CI: failed") and, for large changes, name any files that could not be reviewed.]
@@ -216,9 +233,9 @@ comment or a report entry to match the style below. Layout:
 When the device dimension ran, name the resolved build target in its entry as above — a device
 review judged against an unstated target is not auditable.
 
-**Report:** the `REPORT_URL` from 4.4.a **in full and unabbreviated** — this line is mandatory on every
-run — plus the `INDEX_URL` for the full archive:
-`file:///Users/you/.claude/code-review-reports/reports/gitlab.com/group/repo/mr-482-20260809-141203.html` (all reviews: `…/index.html`)
+**Report:** only when 4.4.a published a page — the artifact URL it returned, in full, with one line
+saying it is private until shared. Omit this line entirely on a run without the `artifact` token;
+never replace it with a local file path, and never offer to write one.
 
 ### Posted inline (n)
 
@@ -243,7 +260,7 @@ so the report is not mistaken for an MR review.
 Table rules:
 - **ID** without brackets; severity is readable from the prefix, so no separate severity column.
 - **Finding** is a noun phrase of ≤ ~8 words — not a sentence, not the description.
-- Never add a Description or Fix column, and never inline a code snippet: that detail is what the report is for.
+- Never add a Description or Fix column, and never inline a code snippet: that detail belongs in the artifact page, or in an on-demand answer below.
 - Skip an empty group's table entirely and say it in one line instead ("Nothing posted — all 3 findings kept in chat.").
 - A posted finding that needed a non-inline anchor notes the fallback level in the Thread cell, as above.
 
