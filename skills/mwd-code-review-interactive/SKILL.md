@@ -1,7 +1,7 @@
 ---
 name: mwd-code-review-interactive
 description: Interactive code review on a GitLab merge request or GitHub pull request — generate feedback, confirm with the user which findings to post, and post approved ones as inline diff comments via glab or gh (auto-detected from the repo URL). Pass `local` instead of a URL to review the current branch from the local checkout with no platform access and nothing posted. Pass `build` to back the review with the repo's own compiler and linter, and `artifact` to also publish the whole review as a private claude.ai page. Use when the user asks to interactively review an MR/PR and post comments, or to review their working branch locally.
-argument-hint: "[merge-request-or-pull-request-url|local] [build] [artifact] [bg=preset|#hex]"
+argument-hint: "[merge-request-or-pull-request-url|local] [build] [max=n] [artifact] [bg=preset|#hex]"
 disable-model-invocation: true
 ---
 
@@ -27,6 +27,7 @@ finding.
 | Token | Effect | Where |
 |:------|:-------|:------|
 | `build`    | runs the repo's own compiler and linter and feeds their diagnostics into the review as evidence | Step 3, `references/build-check.md` |
+| `max=<n>`  | how many findings are offered as selectable posting candidates — default 12, `max=all` for no cap | Step 4.1 |
 | `artifact` | publishes the whole review as a private claude.ai page before the chat summary | Step 4.4, `references/report.md` |
 
 All are optional, and none of them changes what the review looks for — `build` adds evidence the
@@ -51,10 +52,10 @@ everything the page needs comes from there, and this skill ships no renderer of 
 
 ### Step 0: Resolve the modifiers, the mode, then the platform
 
-**Strip the modifiers first.** Take `build`, `artifact` and any `bg=…` token out of `$ARGUMENTS` and
-remember them for Steps 3 and 4.4; none of them is part of the mode. What remains — nothing, a URL, or
-`local [base-ref]` — is what the rest of this step reads. Getting this wrong is how `local build` ends
-up treating `build` as a base ref.
+**Strip the modifiers first.** Take `build`, `artifact` and any `max=…` / `bg=…` token out of
+`$ARGUMENTS` and remember them for Steps 3, 4.1 and 4.4; none of them is part of the mode. What
+remains — nothing, a URL, or `local [base-ref]` — is what the rest of this step reads. Getting this
+wrong is how `local build` ends up treating `build` as a base ref.
 
 **Mode next.** If what remains is the word `local` (case-insensitive, optionally followed by a base
 ref — see Step 1), the run is in **Local mode**: skip the rest of this step entirely, load no platform
@@ -333,8 +334,24 @@ Positive "what looks good" notes are review-only — never posting candidates.
 
 List every actionable finding in chat using its Step 3 ID so the user can decide what to post. Include the location and a short summary; also show the proposed inline-comment body (or at least its summary) so the user knows exactly what would be posted. Findings marked "already raised" are shown separately and are not selectable.
 
-**In Local mode** nothing can be posted, so present the list as the review result rather than a
-selection menu — drop the "proposed inline-comment body", then go straight to Step 4.4.
+**Selection cap.** A confirmation step with 25 options is not a confirmation step — faced with one, the
+user skims and picks nothing, or picks everything. So only the top **n** actionable findings are
+offered as selectable posting candidates: `n` is the `max=<n>` from Step 0 when there was one, and
+**12** otherwise. `max=all` turns the cap off.
+
+- **CRITICAL and HIGH are never capped.** They are offered in full even when they alone exceed `n` — a
+  cap that hides a severe finding is worse than a long list.
+- The cap falls on MED, then LOW: drop the lowest severity first, and within one severity the highest
+  ID number first. What falls off is always the least severe, and the same run caps the same way twice.
+- **Capped findings are not dropped.** They keep their IDs, reach Step 4.4 under "Kept in chat" with
+  `over the selection cap` as the reason, and appear in full on an `artifact` run's page. The cap
+  removes only the chance to post them in this run — say so when you state it, so nobody reads it as
+  the review having found less.
+- State it with both numbers where the list ends: `12 of 19 offered for posting; 7 less severe findings are in the summary.`
+
+**In Local mode** nothing can be posted, so there is no selection and **no cap** — present every
+finding as the review result rather than a selection menu, drop the "proposed inline-comment body",
+then go straight to Step 4.4.
 
 ```
 [HIGH-1] <title> — src/foo.ts:42 — <one-line summary>
@@ -349,12 +366,14 @@ selection menu — drop the "proposed inline-comment body", then go straight to 
 
 Ask the user **once** which findings to post — do **not** confirm findings one at a time. Posting is strictly **opt-in**: only findings the user *explicitly selects* are posted.
 
-- Preferred: use the `AskUserQuestion` tool with `multiSelect: true`, one option per finding. Note its limit of **4 options per question** and **4 questions per call** (≈12 findings); group findings across questions when needed.
-- If there are more findings than fit, ask in plain text instead: "Reply with the IDs to post (e.g. `HIGH-1, MED-2`), or `all` / `none`."
+- **Up to 12 selectable findings** — `AskUserQuestion` with `multiSelect: true`, one option per finding, grouped across questions: its limit is **4 options per question** and **4 questions per call**.
+- **More than 12** — which only happens when CRITICAL and HIGH alone exceed the cap, or `max=` raised it — ask in plain text: "Reply with the IDs to post (e.g. `HIGH-1, MED-2`), or `all` / `none`." Never split one selection across two `AskUserQuestion` calls: the user answers the first before seeing the second, so it is not one decision, and the first answer cannot be revised once the second appears.
 
 **Empty selection or Skip = post nothing.** If the user selects no findings, presses **Skip** / dismisses the prompt, replies `none`, or gives an empty or ambiguous answer, the approved set is **empty**: post **nothing** to the platform, skip Step 4.3 entirely, and go straight to the chat summary in Step 4.4 (every finding is then "kept in chat"). Never post a finding the user did not explicitly select — do **not** fall back to posting "the important ones", the high-severity ones, or any other default subset. When in doubt, post nothing and ask again.
 
-Findings the user does not select — and any un-anchorable or already-raised findings — are **not** posted; they go to the chat summary in Step 4.4.
+Findings the user does not select — and any un-anchorable, already-raised, or over-the-cap findings — are **not** posted; they go to the chat summary in Step 4.4.
+
+If the user asks for a capped finding by ID after seeing the summary ("post LOW-3 as well"), post it: the cap shapes what is *offered*, never what they are allowed to choose.
 
 #### 4.3 Post approved findings as inline comments
 

@@ -111,7 +111,7 @@ Badge mapping, so severity and status read the same on every page:
 | `MED` | `badge--warn` |
 | `LOW` | `badge` |
 | status `posted` | `badge--ok`, wrapped in an `<a>` to the comment when there is one |
-| status `kept` | `badge` — the chat summary's reason (`not selected`, `un-anchorable`, `local run`) goes in the badge text |
+| status `kept` | `badge` — the chat summary's reason (`not selected`, `un-anchorable`, `over the selection cap`, `local run`) goes in the badge text |
 | status `already_raised` | `badge`, plus an `Existing thread ↗` link under the description |
 
 CRITICAL and HIGH share one colour because the system has three status colours, not four; the badge
@@ -228,7 +228,10 @@ comment or a page entry to match the style below. Layout:
 
 **Coverage:** one compact line naming **every** dimension applicable per Step 2, each with `clean`, a finding count, or `not reviewed` + reason — in **both** execution modes, so a small change is auditable exactly like a large one. End it with the pre-scan tally, and on a `build` run with the `build:` segment from `build-check.md` — naming every tool, including the ones that did not run and why. A dimension or a tool that is silently absent is the failure this line exists to prevent.
 
-`Correctness ✓ · Security ✓ · Docs ✓ · TypeScript (2) · Device runtime (1, target swc es5) · Platform scripts ✓ · pre-scan: 7 hits → 2 raised, 5 dismissed · build: tsc 3 → 2 raised, 1 pre-existing · eslint clean`
+`Correctness ✓ · Security ✓ · Docs ✓ · TypeScript (2) · Device runtime (1, target swc es5) · Platform scripts ✓ · pre-scan: 7 hits → 2 raised, 5 dismissed · build: tsc 3 → 2 raised, 1 pre-existing · eslint clean · selection: 12 of 19 offered`
+
+The `selection:` segment appears only when Step 4.1's cap actually held something back, and names both
+numbers. Without it, the reader cannot tell a run that found 12 findings from one that offered 12 of 19.
 
 When the device dimension ran, name the resolved build target in its entry as above — a device
 review judged against an unstated target is not auditable.
@@ -256,8 +259,10 @@ so the report is not mistaken for an MR review.
 | MED-2 | Duplicate fetch per render | `src/a.ts:88` | Efficiency | not selected |
 | LOW-1 | Stale JSDoc on `parse()` | `src/b.ts:12` | Docs | un-anchorable |
 | LOW-2 | Unhandled reject path | `src/c.ts:5` | Correctness | already raised — [thread](https://gitlab.com/group/repo/-/merge_requests/482#note_3) |
+| LOW-3 | Magic number in backoff | `src/d.ts:31` | Code quality | over the selection cap |
 
 Table rules:
+- A finding held back by Step 4.1's selection cap is a row like any other, with `over the selection cap` as its reason. The cap decides what was offered for posting, never what is reported — every finding still appears exactly once, and a run that capped says so in its Coverage line.
 - **ID** without brackets; severity is readable from the prefix, so no separate severity column.
 - **Finding** is a noun phrase of ≤ ~8 words — not a sentence, not the description.
 - Never add a Description or Fix column, and never inline a code snippet: that detail belongs in the artifact page, or in an on-demand answer below.

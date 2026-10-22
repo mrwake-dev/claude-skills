@@ -66,6 +66,14 @@ Pass **`local`** instead of a URL to review your current branch straight from th
 the default branch. The review itself is identical; there is no platform access at all, so nothing is
 fetched and nothing can be posted. You still get every finding in chat.
 
+Three optional tokens, in any combination, with either mode:
+
+| Token | What it does |
+|:------|:-------------|
+| `build`    | runs the repo's **own** compiler and linter and feeds the diagnostics into the review as evidence — a type error or a floating promise is proved by a tool, not asserted by a reader. Never installs anything, and skips itself when the checkout isn't at the change under review |
+| `max=<n>`  | how many findings are offered for posting, lowest severity dropping off first. Default 12, `max=all` for no cap — CRITICAL and HIGH are never capped, and capped findings still reach the summary |
+| `artifact` | publishes the whole review as a private claude.ai page — see [Report page](#report-page) |
+
 What it does beyond a plain review:
 
 - **Verifies every finding** against the full file and its callers before you ever see it, and drops
@@ -112,7 +120,7 @@ closes with the chat summary — a review is never held up by its report page.
 
 | Name                                                          | Description                                                                                                     |
 |:--------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------|
-| `/mwd-code-review-interactive [mr-or-pr-url \| local] [artifact]` | Review a GitLab MR or GitHub PR, confirm which findings to post, and post them as inline comments. `local` reviews the current branch from the working copy with no platform access and nothing posted; `artifact` also publishes the whole review as a private claude.ai page — see [Code review](#code-review). |
+| `/mwd-code-review-interactive [mr-or-pr-url \| local] [build] [max=n] [artifact]` | Review a GitLab MR or GitHub PR, confirm which findings to post, and post them as inline comments. `local` reviews the current branch from the working copy with no platform access and nothing posted; `build` backs the findings with the repo's own compiler and linter; `max=n` caps how many are offered for posting; `artifact` also publishes the whole review as a private claude.ai page — see [Code review](#code-review). |
 | `/mwd-resolve-mr-comments [mr-or-pr-url]`                     | Check every review comment against the current code, then apply the fixes you pick — working tree only, never commits or pushes. |
 | `/mwd-update-mr [mr-or-pr-url]`                               | Write or update the current branch's MR/PR title and description from the branch diff and this conversation — tests run, companion MRs, decisions. Merges into the existing description, confirms before posting, can open a Draft. |
 | `/mwd-agent-rebase [target-branch] [--push] [--ci]`           | Rebase a branch onto its target, resolve mechanical conflicts, and verify with the project's own build. Force-push and pipeline watching are opt-in. |
