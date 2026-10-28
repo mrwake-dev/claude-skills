@@ -30,13 +30,62 @@ key, set `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1`: updates started inside a session d
 
 ### Migrating from the symlink install
 
-Remove the old `~/.claude/skills` and `~/.claude/agents` symlinks after installing the plugin, or every
-skill and agent loads twice, with and without the `mwd:` prefix. Without a trailing slash, `rm` deletes
-only the links:
+Earlier versions of this README installed the repo by cloning it and symlinking its `skills/` and
+`agents/` into `~/.claude`. To switch an existing setup to the plugin:
 
-```sh
-rm ~/.claude/skills ~/.claude/agents
-```
+1. **Update the clone**, so it has the `.claude-plugin/` manifests:
+
+   ```sh
+   git -C ~/Documents/develop/mrwake-dev/claude-skills pull
+   ```
+
+2. **Install the plugin.** Use the clone as the source if you edit the skills; use
+   `mrwake-dev/claude-skills` instead if you only use them, and the clone is no longer needed afterwards:
+
+   ```sh
+   claude plugin marketplace add ~/Documents/develop/mrwake-dev/claude-skills
+   claude plugin install mwd@mrwake-dev
+   ```
+
+3. **Replace the symlinks with real folders.** Until they're gone, every skill and agent loads twice,
+   with and without the `mwd:` prefix. Check that each one is a `->` link to the clone first. Without a
+   trailing slash, `rm` deletes only the link, never the clone's files:
+
+   ```sh
+   ls -ld ~/.claude/skills ~/.claude/agents ~/.claude/commands
+   rm ~/.claude/skills ~/.claude/agents
+   mkdir ~/.claude/skills ~/.claude/agents
+   ```
+
+   Remove `~/.claude/commands` the same way if it links to the clone. The repo no longer has a
+   `commands/` folder, so that link points at nothing.
+
+4. **Keep what only lived in the clone.** A GitHub install contains only committed files, so skills or
+   agents you kept in the clone without committing them stop loading. List them, and copy the ones you
+   want into the new `~/.claude/skills` or `~/.claude/agents`:
+
+   ```sh
+   git -C ~/Documents/develop/mrwake-dev/claude-skills status --ignored --short skills agents
+   ```
+
+   With the clone as the source, Claude Code reads it as it is on disk, so those files keep loading
+   under the `mwd:` prefix and you can skip this step.
+
+5. **Switch to the new names.** Start a new session, or run `/reload-plugins`, and check that
+   `claude plugin list` shows `mwd@mrwake-dev` as enabled. Every skill and agent now has the plugin's
+   prefix:
+
+   | Before                         | After                              |
+   |:-------------------------------|:-----------------------------------|
+   | `/mwd-code-review-interactive` | `/mwd:mwd-code-review-interactive` |
+   | `planner` agent                | `mwd:planner`                      |
+
+   Update anything that still calls them by the old name, such as your `CLAUDE.md`, another skill's
+   `subagent_type` or a shell alias.
+
+To go back, run `claude plugin marketplace remove mrwake-dev`, which also uninstalls the plugin. Then
+move out anything you put in `~/.claude/skills` and `~/.claude/agents`, delete both folders, and
+symlink the clone's `skills/` and `agents/` into `~/.claude` again.
 
 ## Prerequisites
 
