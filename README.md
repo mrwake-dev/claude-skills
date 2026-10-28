@@ -13,6 +13,7 @@
     <a href="#skills">Skills</a> ·
     <a href="#agents">Agents</a> ·
     <a href="docs/code-review.md">Code review</a> ·
+    <a href="#troubleshooting">Troubleshooting</a> ·
     <a href="#development">Development</a>
   </p>
 </div>
@@ -154,6 +155,54 @@ Claude pick.
 | `mwd:planner` | Turns a feature, an architecture change or a refactor into a step-by-step plan. |
 | `mwd:refactor-cleaner` | Finds unused code with knip, depcheck and ts-prune, and removes it. |
 | `mwd:mwd-review-*` | Six reviewers, one per area: correctness, security, docs, language, device and platform scripts. The code review skill starts them on large changes; you don't call them yourself. |
+
+## Troubleshooting
+
+### A command isn't found
+
+Every command starts with the plugin's name, so it's `/mwd:mwd-code-review-interactive`, not
+`/mwd-code-review-interactive`. If the `mwd:` commands are missing too, check that the plugin is
+installed and enabled:
+
+```sh
+claude plugin list
+```
+
+If `mwd@mrwake-dev` isn't listed, install it as described in [Add the plugin](#add-the-plugin). If it's
+listed but disabled, run `claude plugin enable mwd@mrwake-dev`. Then start a new session, or run
+`/reload-plugins` in the current one.
+
+### Every skill and agent shows up twice
+
+The old symlinks from before the plugin are still in `~/.claude`, so Claude Code loads each skill once
+from them and once from the plugin. Check with `ls -ld ~/.claude/skills ~/.claude/agents`: an arrow
+(`->`) means it's still a link. Replace the links as described in step 1 of
+[Moving from the symlink setup](#moving-from-the-symlink-setup).
+
+### Skills fail on Windows
+
+Without Git Bash, Claude Code runs commands in PowerShell, where the skills' bash scripts don't work.
+Install Git for Windows (`winget install --id Git.Git -e`) and restart Claude
+Code. If that doesn't help, point Claude Code at `bash.exe` with `CLAUDE_CODE_GIT_BASH_PATH`, as shown
+in [Windows](#windows).
+
+### Skills can't read the merge request or pull request
+
+`gh` or `glab` isn't logged in, or is logged in to a different server. Check both:
+
+```sh
+gh auth status
+glab auth status
+```
+
+Log in with `gh auth login` or `glab auth login`. For a self-hosted GitLab, name the server:
+`glab auth login --hostname gitlab.example.com`.
+
+### Installing or updating the plugin fails over SSH
+
+On a machine without a GitHub SSH key, installs started inside a session and plugin updates don't switch
+to HTTPS on their own. Set `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1`, as shown in
+[Add the plugin](#add-the-plugin), open a new terminal, and try again.
 
 ## Uninstall
 
