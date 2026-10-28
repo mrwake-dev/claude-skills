@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-labelledby="title">
+	<title id="title">Claude skills: a terminal types /wake and answers ✓ awake</title>
+	<style>
+		text {
+			font: 400 11px 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+		}
+		.c1 { animation: c1 3s step-end infinite; }
+		.c2 { animation: c2 3s step-end infinite; }
+		.c3 { animation: c3 3s step-end infinite; }
+		.c4 { animation: c4 3s step-end infinite; }
+		.c5 { animation: c5 3s step-end infinite; }
+		.cursor { animation: cursor 3s step-end infinite; }
+		.blink { animation: blink 0.8s step-end infinite; }
+		.output { animation: output 3s infinite; }
+		/* Same 3s cycle as the mrwake.dev tile: erase at 8%, type one letter per 5.6% from 16%, answer at 48-54%. */
+		@keyframes c1 { 0% { opacity: 1; } 8% { opacity: 0; } 21.6% { opacity: 1; } }
+		@keyframes c2 { 0% { opacity: 1; } 8% { opacity: 0; } 27.2% { opacity: 1; } }
+		@keyframes c3 { 0% { opacity: 1; } 8% { opacity: 0; } 32.8% { opacity: 1; } }
+		@keyframes c4 { 0% { opacity: 1; } 8% { opacity: 0; } 38.4% { opacity: 1; } }
+		@keyframes c5 { 0% { opacity: 1; } 8% { opacity: 0; } 44% { opacity: 1; } }
+		@keyframes cursor {
+			0% { transform: translateX(0); }
+			8% { transform: translateX(-33px); }
+			21.6% { transform: translateX(-26.4px); }
+			27.2% { transform: translateX(-19.8px); }
+			32.8% { transform: translateX(-13.2px); }
+			38.4% { transform: translateX(-6.6px); }
+			44% { transform: translateX(0); }
+		}
+		@keyframes blink { 50% { opacity: 0; } }
+		@keyframes output {
+			0% { opacity: 1; animation-timing-function: step-end; }
+			8% { opacity: 0; animation-timing-function: step-end; }
+			48% { opacity: 0; }
+			54%, 100% { opacity: 1; }
+		}
+		@media (prefers-reduced-motion: reduce) {
+			* { animation: none !important; }
+		}
+	</style>
+	<rect width="80" height="80" rx="19" fill="#efe9dd"/>
+	<rect x="8" y="12" width="64" height="56" rx="8" fill="#1f1c18"/>
+	<g fill="#4e483f">
+		<circle cx="16" cy="21" r="2"/>
+		<circle cx="23" cy="21" r="2"/>
+		<circle cx="30" cy="21" r="2"/>
+	</g>
+	<text x="14" y="39" fill="#d97757">›</text>
+	<g fill="#efe9dd">
+		<text class="c1" x="23.6" y="39">/</text>
+		<text class="c2" x="30.2" y="39">w</text>
+		<text class="c3" x="36.8" y="39">a</text>
+		<text class="c4" x="43.4" y="39">k</text>
+		<text class="c5" x="50" y="39">e</text>
+	</g>
+	<g class="cursor">
+		<rect class="blink" x="57.6" y="29" width="6" height="12" fill="#d97757"/>
+	</g>
+	<text class="output" x="14" y="58" fill="#8fd19e">✓ awake</text>
+</svg>
