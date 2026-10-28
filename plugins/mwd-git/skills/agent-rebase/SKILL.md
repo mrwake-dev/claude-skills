@@ -1,6 +1,6 @@
 ---
 name: agent-rebase
-description: Rebase a feature branch onto a selected target branch (latest origin/master or origin/main by default), resolving mechanical conflicts automatically and regenerating lockfiles when needed, then verifying the result with the project's own build. Force-pushing and pipeline-watching are opt-in via --push and --ci. Use when a branch is behind its base branch, has merge conflicts, or needs a rebase before review/merge.
+description: Rebase a feature branch onto a selected target branch (the latest main or master on the branch's remote by default), resolving mechanical conflicts automatically and regenerating lockfiles when needed, then verifying the result with the project's own build. Force-pushing and pipeline-watching are opt-in via --push and --ci. Use when a branch is behind its base branch, has merge conflicts, or needs a rebase before review/merge.
 argument-hint: "[target-branch] [--push] [--ci]"
 disable-model-invocation: true
 allowed-tools: Read, Edit, Write, Glob, Grep, Bash, AskUserQuestion
@@ -9,7 +9,7 @@ model: opus
 
 # Rebase Branch
 
-Rebase a feature branch onto a target branch — the default branch (`origin/master` or `origin/main`) unless the user picks another — resolve the conflicts, and prove the result still builds.
+Rebase a feature branch onto a target branch — the default branch (`main` or `master` on the branch's remote) unless the user picks another — resolve the conflicts, and prove the result still builds.
 
 ## Arguments
 
@@ -17,7 +17,7 @@ Rewriting published history is the user's call, not yours. Both write actions ar
 
 | Argument          | Effect                                                                                       |
 |:------------------|:----------------------------------------------------------------------------------------------|
-| `[target-branch]` | Rebase onto this branch instead of asking. Bare name (`master`, `release/2.4`), no `origin/`. |
+| `[target-branch]` | Rebase onto this branch instead of asking. Bare name (`master`, `release/2.4`), no remote prefix. |
 | `--push`          | Permission to `git push --force-with-lease` once verification passes (Step 6).                 |
 | `--ci`            | After pushing, watch the pipeline and report the result (Step 7). Implies `--push`.            |
 
@@ -68,31 +68,77 @@ Present the current repo + current branch as the default option, plus recently a
 
 If the working tree is dirty, stop and ask the user how to handle the uncommitted changes — never silently stash-drop or discard them.
 
+Then find the branch's remote. **Never assume `origin`**: take the branch's upstream, else the only
+remote, else ask the user which one.
+
+```bash
+UPSTREAM="$("$GIT" rev-parse --abbrev-ref --symbolic-full-name '<branch>@{u}' 2>/dev/null)"   # e.g. github/feature-x
+REMOTE="${UPSTREAM%%/*}"
+[ -n "$REMOTE" ] || { [ "$("$GIT" remote | wc -l | tr -d ' ')" = 1 ] && REMOTE="$("$GIT" remote)"; }
+REMOTE_BRANCH="${UPSTREAM#*/}"; [ -n "$UPSTREAM" ] || REMOTE_BRANCH="<branch>"
+echo "remote=${REMOTE:-ask} remote-branch=$REMOTE_BRANCH upstream=${UPSTREAM:-none}"
+"$GIT" remote -v
+```
+
+Use them as `REMOTE` and `REMOTE_BRANCH` in all following steps. `REMOTE_BRANCH` is the branch's name on
+the remote, which can differ from the local name.
+
 ## Step 1b: Select the Target Branch
 
 Determine the repo's default branch and offer a target-branch selection, with the default branch (`master`/`main`) as the **default option**:
 
 ```bash
-DEFAULT_BRANCH=$("$GIT" remote show origin | grep "HEAD branch" | awk '{print $NF}')
+DEFAULT_BRANCH="$("$GIT" symbolic-ref --quiet --short "refs/remotes/$REMOTE/HEAD" 2>/dev/null)"
+DEFAULT_BRANCH="${DEFAULT_BRANCH#"$REMOTE"/}"
+[ -n "$DEFAULT_BRANCH" ] || for c in main master; do
+  "$GIT" rev-parse --verify --quiet "$REMOTE/$c" >/dev/null && { DEFAULT_BRANCH="$c"; break; }
+done
 "$GIT" --no-pager branch -r --sort=-committerdate | head -8   # other candidate target branches
 ```
 
 - If the user already named a target branch, use it without asking.
 - Otherwise ask, offering: `$DEFAULT_BRANCH` (recommended default), plus a few likely alternatives (recently active remote branches, e.g. a release or epic branch the feature branch was forked from).
-- Verify the chosen target exists on the remote: `git rev-parse --verify origin/<target>`.
+- Verify the chosen target exists on the remote: `git rev-parse --verify "$REMOTE/<target>"`.
 
 Use the selected branch as `TARGET_BRANCH` in all following steps.
 
 ## Step 2: Sync With Remote and Rebase
 
-**CRITICAL: reset the local branch to the remote tip before rebasing.** Other agents or humans may have pushed commits since the last fetch — rebasing a stale local branch and force-pushing destroys their work.
+**CRITICAL: sync the local branch with its remote copy before rebasing.** Other agents or humans may have
+pushed commits since the last fetch — rebasing a stale local branch and force-pushing destroys their work.
+But the user's own commits may exist only locally, and resetting to the remote copy would drop them.
+**Check before you reset:**
 
 ```bash
-"$GIT" fetch origin
+"$GIT" fetch "$REMOTE"
 "$GIT" checkout <branch>
-"$GIT" reset --hard origin/<branch>    # ← sync with remote; local may be stale
+if "$GIT" rev-parse --verify --quiet "$REMOTE/$REMOTE_BRANCH" >/dev/null; then
+  echo "local-only=$("$GIT" rev-list --count "$REMOTE/$REMOTE_BRANCH"..HEAD) remote-only=$("$GIT" rev-list --count HEAD.."$REMOTE/$REMOTE_BRANCH")"
+  "$GIT" --no-pager log --oneline "$REMOTE/$REMOTE_BRANCH"..HEAD   # commits that exist only locally
+else
+  echo "not on the remote yet"
+fi
+```
 
-"$GIT" rebase origin/$TARGET_BRANCH
+| Result | What to do |
+|:-------|:-----------|
+| `not on the remote yet` | Nothing to sync with. Rebase the local branch as it is. |
+| `local-only=0` | Reset to the remote copy: `"$GIT" reset --hard "$REMOTE/$REMOTE_BRANCH"`. It only adds what others pushed. |
+| `local-only` above 0 | **Ask** with `AskUserQuestion`, listing those commits. **Never reset without an answer.** |
+
+The options for local-only commits:
+
+- **Keep them** (recommended). With `remote-only=0` the local branch already contains the remote copy, so
+  skip the reset. Otherwise replay them on the remote copy first with
+  `"$GIT" rebase "$REMOTE/$REMOTE_BRANCH"`, resolving conflicts as in Step 3.
+- **Drop them**: reset to the remote copy as above, and tell the user the commits are still recoverable
+  with `git reflog`.
+- **Stop**: change nothing and end the run.
+
+Then rebase onto the target:
+
+```bash
+"$GIT" rebase "$REMOTE/$TARGET_BRANCH"
 ```
 
 **Do NOT autosquash.** Plain `git rebase` — no `-i --autosquash` — so existing `fixup!` commits survive the rebase intact. Only autosquash if the user explicitly asks for it.
@@ -134,7 +180,7 @@ For `package-lock.json` / `pnpm-lock.yaml` conflicts, first try the mechanical r
 Take the target branch's lockfile and fully regenerate it from the (already resolved) `package.json`:
 
 ```bash
-"$GIT" checkout origin/$TARGET_BRANCH -- package-lock.json   # or pnpm-lock.yaml
+"$GIT" checkout "$REMOTE/$TARGET_BRANCH" -- package-lock.json   # or pnpm-lock.yaml
 npm install --package-lock-only                              # or: pnpm install --lockfile-only
 "$GIT" add package-lock.json
 "$GIT" rebase --continue
@@ -153,8 +199,8 @@ A rebase is not done when the conflicts stop. Porting an edit onto successor cod
 History first:
 
 ```bash
-"$GIT" --no-pager log --oneline origin/$TARGET_BRANCH..HEAD | cat   # right commits, fixups preserved
-"$GIT" --no-pager diff origin/$TARGET_BRANCH...HEAD --stat | cat    # no file you never touched
+"$GIT" --no-pager log --oneline "$REMOTE/$TARGET_BRANCH"..HEAD | cat   # right commits, fixups preserved
+"$GIT" --no-pager diff "$REMOTE/$TARGET_BRANCH"...HEAD --stat | cat    # no file you never touched
 ```
 
 Then run the project's own checks — **do not invent commands**. Read `package.json` scripts (or `Makefile`, `pom.xml`, `go.mod`, `pyproject.toml`) and run what is actually defined, cheapest first:
@@ -167,7 +213,7 @@ npm test --if-present
 
 - **Only run what the project defines.** No script → say so and move on; a missing test script is not a failure.
 - If a check needs services the machine does not have (a database, a device), say which one you skipped and why. Do not fake a pass.
-- The bar is **no worse than the target branch**. If a check already fails on `origin/$TARGET_BRANCH`, that failure is pre-existing — report it, do not try to fix it here.
+- The bar is **no worse than the target branch**. If a check already fails on `$REMOTE/$TARGET_BRANCH`, that failure is pre-existing — report it, do not try to fix it here.
 - **A failure caused by the rebase stops the run.** Report the failing check and what conflict resolution likely caused it. Never push a branch you know is broken; never "fix" it with unrelated edits.
 
 ## Step 6: Force-Push (only with `--push`)
@@ -175,23 +221,23 @@ npm test --if-present
 **Without `--push`, stop here.** Report what was rebased, what verification found, and print the command for the user:
 
 ```
-Rebased onto origin/master, 7 commits, lint+build pass.
-Push it yourself with:  git push --force-with-lease origin <branch>
+Rebased onto github/main, 7 commits, lint+build pass.
+Push it yourself with:  git push --force-with-lease github HEAD:feature-x
 ```
 
 With `--push`:
 
 ```bash
-"$GIT" push --force-with-lease origin <branch> 2>&1 | cat
+"$GIT" push --force-with-lease "$REMOTE" "HEAD:$REMOTE_BRANCH" 2>&1 | cat
 ```
 
 - Always `--force-with-lease`, never `--force`.
-- If `--force-with-lease` is rejected, someone pushed while you worked. **Do not retry with `--force`** — re-fetch, redo Step 2's reset, and rebase again.
+- If `--force-with-lease` is rejected, someone pushed while you worked. **Do not retry with `--force`** — re-fetch and redo Step 2, including its check for local-only commits.
 - If the push hangs, it is likely waiting for a GPG/SSH passphrase — ask the user to check the terminal. **Never** use `ssh-add`/`ssh-agent`, never disable GPG signing.
 
 ## Step 7: Watch the Pipeline (only with `--ci`)
 
-Only after a successful push. Detect the platform from the remote URL — `git remote get-url origin` — and use the matching CLI:
+Only after a successful push. Detect the platform from the remote URL — `"$GIT" remote get-url "$REMOTE"` — and use the matching CLI:
 
 ```bash
 # GitLab
@@ -213,14 +259,16 @@ Only after a successful push. Detect the platform from the remote URL — `git r
 - Treating `--ci` as permission to keep pushing commits until the pipeline goes green
 - Skipping Step 5 because the rebase had no conflicts — a lockfile regeneration alone can break the build
 - Pushing a branch whose build you know is broken, or "fixing" it with edits unrelated to the conflicts
-- Rebasing without `git reset --hard origin/<branch>` first — a stale local branch force-pushed over the remote destroys other people's commits
+- Rebasing without syncing to `$REMOTE/$REMOTE_BRANCH` first — a stale local branch force-pushed over the remote destroys other people's commits
+- Resetting to the remote copy while local-only commits exist, without asking — that drops the user's unpushed work
+- Assuming the remote is called `origin` — use the branch's upstream remote
 - Autosquashing `fixup!` commits without being asked
 - Using `--force` instead of `--force-with-lease`, or retrying with `--force` after a lease rejection
 - Hand-editing lockfile conflict hunks instead of regenerating from `package.json`
 - Regenerating a lockfile with the wrong package manager — `pnpm-lock.yaml` is not npm's
 - Inventing build or test commands the project does not define, or reporting a skipped check as a pass
 - Assuming master/main as the target without offering the selection — the branch may be based on a release/epic branch
-- Rebasing onto a local, stale copy of the target branch instead of `origin/$TARGET_BRANCH` after a fresh fetch
+- Rebasing onto a local, stale copy of the target branch instead of `$REMOTE/$TARGET_BRANCH` after a fresh fetch
 - Asking the user about trivially mechanical conflicts (CHANGELOG merges, import lists)
 - Silently picking a side on a genuine design conflict instead of asking
 - Discarding uncommitted working-tree changes without asking

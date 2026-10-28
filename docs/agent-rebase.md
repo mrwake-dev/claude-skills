@@ -6,27 +6,24 @@ checks that the result still builds. It pushes only when you pass `--push`.
 A run goes like this:
 
 1. It picks the repository and branch, asking when they aren't obvious. If you have uncommitted changes,
-   it stops and asks how to handle them.
+   it stops and asks how to handle them. It works with the branch's own remote, so the remote doesn't
+   have to be called `origin`.
 2. It picks the target branch: the one you named, or it asks, suggesting the default branch and recently
    active ones.
-3. It fetches, resets your local branch to its copy on the remote, and rebases onto the fresh target. The
-   reset means commits other people pushed to your branch aren't lost when it force-pushes later.
-4. It resolves simple conflicts itself and asks you about the rest.
+3. It fetches and syncs your branch with its copy on the remote, so commits other people pushed aren't
+   lost when it force-pushes later. If your branch has commits you haven't pushed, it lists them and asks
+   whether to keep them, drop them, or stop, instead of resetting over them.
+4. It rebases onto the freshly fetched target, resolves simple conflicts itself and asks you about the
+   rest.
 5. It regenerates a conflicted lockfile from `package.json` instead of merging it by hand.
 6. It checks the commit history and runs the project's own lint, build and tests.
 7. It stops and prints the push command, unless you passed `--push`.
-
-## Before you start
-
-- **Push your local commits first.** Step 3 resets your local branch to the remote copy, so commits you
-  haven't pushed are left out of the rebase. They're still recoverable with `git reflog`.
-- **The remote must be called `origin`.** The skill fetches from, rebases onto and pushes to `origin`.
 
 ## Options
 
 | Option | What it does |
 |:-------|:-------------|
-| `[target-branch]` | Rebases onto this branch instead of asking. Use the bare name, such as `main` or `release/2.4`, without `origin/`. |
+| `[target-branch]` | Rebases onto this branch instead of asking. Use the bare name, such as `main` or `release/2.4`, without the remote's name in front. |
 | `--push` | Force-pushes with `--force-with-lease` once the checks pass. |
 | `--ci` | Also pushes, then watches the pipeline and reports its result. |
 
@@ -83,6 +80,7 @@ unclear, and shows the options: one side, the other, or a combination.
 - Invent build or test commands. It runs only what the project defines.
 - Edit lockfile conflicts by hand, or regenerate a lockfile with a different package manager.
 - Squash `fixup!` commits unless you ask.
+- Drop commits you haven't pushed without asking first.
 - Discard your uncommitted changes, or abort the rebase unless you ask.
 - Keep pushing commits to turn a red pipeline green. With `--ci`, it reports the failing job and stops.
 - Touch your SSH agent or GPG signing when a push hangs. It asks you to check the terminal.
