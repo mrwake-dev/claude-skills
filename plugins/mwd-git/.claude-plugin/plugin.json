@@ -1,6 +1,6 @@
 {
   "name": "mwd-git",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Merge request chores: resolve review comments, write the description, rebase onto the target branch",
   "author": {
     "name": "MrWakeCZ"
