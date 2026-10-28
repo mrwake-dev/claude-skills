@@ -85,6 +85,8 @@ only those:
 for tool in git jq gh glab node; do printf '%-5s %s\n' "$tool" "$(command -v "$tool" || echo missing)"; done
 gh auth status      # only when gh is needed
 glab auth status    # only when glab is needed
+uname -s; command -v brew || echo "brew missing"
+grep -E '^(ID|ID_LIKE)=' /etc/os-release 2>/dev/null || true   # Linux distribution
 ```
 
 `node` often comes from a version manager such as nvm that a fresh shell hasn't loaded. If it's missing, say
@@ -94,7 +96,23 @@ Report one line per needed tool: the tool, which plugin needs it, and whether it
 For each problem, give the command to fix it, and don't run it: installing software and logging in are the
 user's call.
 
-- **macOS and Linux:** `brew install gh glab jq` (only the missing ones). For `node`, nodejs.org or nvm.
+Pick the commands by platform, and list only the missing tools in them:
+
+- **macOS, or Linux with Homebrew:** `brew install gh glab jq`. For `node`, nodejs.org or nvm.
+- **Linux without Homebrew**, by `ID` and `ID_LIKE` from `/etc/os-release`:
+  - Debian, Ubuntu, or `ID_LIKE` naming either: `sudo apt install git jq`, and `sudo snap install glab` (a
+    community package; on Debian, `snapd` comes first). Where snap isn't available, a `.deb` from
+    https://gitlab.com/gitlab-org/cli/-/releases works too.
+  - Fedora, only when `ID=fedora`: `sudo dnf install git jq glab` (`glab` is a community package there).
+    RHEL and CentOS also report `ID_LIKE` fedora, but their repositories may not have `glab`, so treat them
+    as anything else.
+  - Anything else: the distribution's own `git` and `jq` packages. `glab` is officially supported on Linux
+    only through Homebrew.
+  - `gh` everywhere: it comes from GitHub's own package repository, which takes several commands to add.
+    Point to the commands in the README,
+    https://github.com/mrwake-dev/claude-skills#macos-and-linux, or GitHub's guide,
+    https://github.com/cli/cli/blob/trunk/docs/install_linux.md, rather than writing a shortened version.
+  - For `node`, nodejs.org or nvm.
 - **Windows** (`uname -s` starts with `MINGW` or `MSYS`): `winget install --id <id> -e` with `Git.Git`,
   `GitHub.cli`, `GLab.GLab`, `jqlang.jq` or `OpenJS.NodeJS.LTS`.
 - **Not logged in:** `gh auth login`, or `glab auth login`, adding `--hostname <server>` for a self-hosted
