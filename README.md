@@ -13,7 +13,7 @@
     <a href="#plugins">Plugins</a> ·
     <a href="#skills">Skills</a> ·
     <a href="#agents">Agents</a> ·
-    <a href="docs/code-review.md">Code review</a> ·
+    <a href="docs/">Guides</a> ·
     <a href="#troubleshooting">Troubleshooting</a> ·
     <a href="#development">Development</a>
   </p>
@@ -139,10 +139,10 @@ start on its own, when you ask Claude for a page or a dashboard.
 | `/mwd:setup` | Asks which plugins you want, installs or removes them, and checks the tools they need. |
 | `/mwd-review:code-review-interactive <url \| local>` | Reviews a GitLab merge request or a GitHub pull request, asks which findings to post, and posts them as comments on the changed lines. `local` reviews your current branch instead. See the [code review guide](docs/code-review.md). |
 | `/mwd-review:create-artifact [what to build] [bg=...]` | Builds a dark page (graphite and violet) from what the session already has, such as a dashboard, a pull request walkthrough or a comparison, and publishes it as a private claude.ai link. `bg=navy`, `oled`, `warm` or a dark hex color changes the background. If publishing is turned off, it tells you which setting blocks it. |
-| `/mwd-git:resolve-mr-comments [url]` | Checks every review comment against the current code and applies the fixes you choose. It only edits files; it never commits or pushes. |
-| `/mwd-git:update-mr [url]` | Writes or updates the title and description of your branch's merge request from the diff and the conversation: tests you ran, related merge requests, decisions. It keeps what's already there, asks before posting, and can open the merge request as a draft. |
-| `/mwd-git:agent-rebase [target-branch] [--push] [--ci]` | Rebases your branch onto its target (the latest `main` or `master` by default), resolves simple conflicts, regenerates lockfiles and checks the result with the project's own build. It force-pushes only with `--push`; `--ci` also pushes and then watches the pipeline. |
-| `/mwd-security:fix-dependabot-alerts` | Reads the repo's open Dependabot alerts and groups the vulnerable packages by severity. For the groups you pick, it upgrades npm, yarn, pnpm, bun, Maven or Gradle dependencies, asks you about risky upgrades, and runs the project's build and tests. It never commits, pushes or writes to GitHub. |
+| `/mwd-git:resolve-mr-comments [url]` | Checks every review comment against the current code and applies the fixes you choose. It only edits files; it never commits or pushes. See the [guide](docs/resolve-mr-comments.md). |
+| `/mwd-git:update-mr [url]` | Writes or updates the title and description of your branch's merge request from the diff and the conversation: tests you ran, related merge requests, decisions. It keeps what's already there, asks before posting, and can open the merge request as a draft. See the [guide](docs/update-mr.md). |
+| `/mwd-git:agent-rebase [target-branch] [--push] [--ci]` | Rebases your branch onto its target (the latest `main` or `master` by default), resolves simple conflicts, regenerates lockfiles and checks the result with the project's own build. It force-pushes only with `--push`; `--ci` also pushes and then watches the pipeline. See the [guide](docs/agent-rebase.md). |
+| `/mwd-security:fix-dependabot-alerts` | Reads the repo's open Dependabot alerts and groups the vulnerable packages by severity. For the groups you pick, it upgrades npm, yarn, pnpm, bun, Maven or Gradle dependencies, asks you about risky upgrades, and runs the project's build and tests. It never commits, pushes or writes to GitHub. See the [guide](docs/fix-dependabot-alerts.md). |
 | `/mwd-security:node-security-audit` | Checks a Node.js project for vulnerable, outdated and deprecated packages, peer dependency conflicts and Node.js version mismatches, then writes a prioritized upgrade plan. |
 | `/mwd-security:java-security-check` | Reviews a Java project for security problems and explains how to fix each one. |
 | `/mwd-cloudflare:prepare-to-cf-workers [worker-name]` | Prepares a website for Cloudflare Workers: adds Wrangler and its config, headers and 404 handling, tests the site locally, deploys it once you confirm, and lists the settings for building from Git. |
