@@ -132,22 +132,23 @@ If Claude Code can't find Git Bash, tell it where `bash.exe` is in
 ## Skills
 
 Run a skill by typing its command in a Claude Code session. Only `/mwd-review:create-artifact` can also
-start on its own, when you ask Claude for a page or a dashboard.
+start on its own, when you ask Claude for a page or a dashboard. The guides cover each skill's options in
+full.
 
-| Command | What it does |
+| Command&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | What it does |
 |:--------|:-------------|
-| `/mwd:setup` | Asks which plugins you want, installs or removes them, and checks the tools they need. |
-| `/mwd-review:code-review-interactive <url \| local>` | Reviews a GitLab merge request or a GitHub pull request, asks which findings to post, and posts them as comments on the changed lines. `local` reviews your current branch instead. See the [code review guide](docs/code-review.md). |
-| `/mwd-review:create-artifact [what to build] [bg=...]` | Builds a dark page (graphite and violet) from what the session already has, such as a dashboard, a pull request walkthrough or a comparison, and publishes it as a private claude.ai link. `bg=navy`, `oled`, `warm` or a dark hex color changes the background. If publishing is turned off, it tells you which setting blocks it. |
-| `/mwd-git:resolve-mr-comments [url]` | Checks every review comment against the current code and applies the fixes you choose. It only edits files; it never commits or pushes. See the [guide](docs/resolve-mr-comments.md). |
-| `/mwd-git:update-mr [url]` | Writes or updates the title and description of your branch's merge request from the diff and the conversation: tests you ran, related merge requests, decisions. It keeps what's already there, asks before posting, and can open the merge request as a draft. See the [guide](docs/update-mr.md). |
-| `/mwd-git:agent-rebase [target-branch] [--push] [--ci]` | Rebases your branch onto its target (the latest `main` or `master` by default), resolves simple conflicts, regenerates lockfiles and checks the result with the project's own build. It force-pushes only with `--push`; `--ci` also pushes and then watches the pipeline. See the [guide](docs/agent-rebase.md). |
-| `/mwd-security:fix-dependabot-alerts` | Reads the repo's open Dependabot alerts and groups the vulnerable packages by severity. For the groups you pick, it upgrades npm, yarn, pnpm, bun, Maven or Gradle dependencies, asks you about risky upgrades, and runs the project's build and tests. It never commits, pushes or writes to GitHub. See the [guide](docs/fix-dependabot-alerts.md). |
-| `/mwd-security:node-security-audit` | Checks a Node.js project for vulnerable, outdated and deprecated packages, peer dependency conflicts and Node.js version mismatches, then writes a prioritized upgrade plan. |
+| `/mwd:setup` | Installs the plugins you pick, removes the ones you untick, and checks the tools they need. |
+| `/mwd-review:code-review-interactive` | Reviews a merge request or pull request by its URL, or your branch with `local`, and posts the findings you approve as comments. [Guide](docs/code-review.md) |
+| `/mwd-review:create-artifact` | Turns what the session holds, such as a dashboard or a comparison, into a dark page at a private claude.ai link. Add `bg=navy`, `oled`, `warm` or a hex color for another background. |
+| `/mwd-git:resolve-mr-comments` | Checks a merge request's review comments against the code and applies the fixes you pick, without committing. [Guide](docs/resolve-mr-comments.md) |
+| `/mwd-git:update-mr` | Writes the title and description of your branch's merge request from the diff and the session, and asks before posting. [Guide](docs/update-mr.md) |
+| `/mwd-git:agent-rebase` | Rebases your branch onto its target, resolves simple conflicts and checks the build. It pushes only when you ask. [Guide](docs/agent-rebase.md) |
+| `/mwd-security:fix-dependabot-alerts` | Upgrades the packages behind the Dependabot alerts you pick and runs the project's checks, without committing. [Guide](docs/fix-dependabot-alerts.md) |
+| `/mwd-security:node-security-audit` | Checks a Node.js project for vulnerable, outdated and deprecated packages and version conflicts, then writes a prioritized upgrade plan. |
 | `/mwd-security:java-security-check` | Reviews a Java project for security problems and explains how to fix each one. |
-| `/mwd-cloudflare:prepare-to-cf-workers [worker-name]` | Prepares a website for Cloudflare Workers: adds Wrangler and its config, headers and 404 handling, tests the site locally, deploys it once you confirm, and lists the settings for building from Git. |
-| `/mwd-docs:shorter-jsdocs [--committed \| --uncommitted] [path...]` | Shortens the JSDoc comments your branch touched and removes the ones that add nothing. |
-| `/mwd-docs:markdown-check <file.md> [language]` | Checks a Markdown file's grammar and readability. The language defaults to English. |
+| `/mwd-cloudflare:prepare-to-cf-workers` | Sets a website up for Cloudflare Workers, tests it locally and deploys once you confirm. Add a name for the Worker, or it takes the one in `package.json`. |
+| `/mwd-docs:shorter-jsdocs` | Shortens or removes the JSDoc comments your branch touched. Add `--committed` or `--uncommitted` to check only one kind of change, or paths to narrow it down. |
+| `/mwd-docs:markdown-check` | Checks a Markdown file's grammar and readability. Add the file's path, and its language if it isn't English. |
 
 ## Agents
 
