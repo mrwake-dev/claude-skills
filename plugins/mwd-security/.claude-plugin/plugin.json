@@ -1,0 +1,16 @@
+{
+  "name": "mwd-security",
+  "version": "1.0.0",
+  "description": "Security audits for Dependabot alerts, Node.js dependencies and Java code",
+  "author": {
+    "name": "MrWakeCZ"
+  },
+  "homepage": "https://github.com/mrwake-dev/claude-skills#readme",
+  "repository": "https://github.com/mrwake-dev/claude-skills",
+  "keywords": [
+    "security",
+    "dependabot",
+    "npm",
+    "java"
+  ]
+}

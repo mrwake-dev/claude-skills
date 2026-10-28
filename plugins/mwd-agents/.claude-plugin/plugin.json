@@ -1,0 +1,15 @@
+{
+  "name": "mwd-agents",
+  "version": "1.0.0",
+  "description": "General agents: codebase explorer, code simplifier, planner and dead-code cleaner",
+  "author": {
+    "name": "MrWakeCZ"
+  },
+  "homepage": "https://github.com/mrwake-dev/claude-skills#readme",
+  "repository": "https://github.com/mrwake-dev/claude-skills",
+  "keywords": [
+    "agents",
+    "refactoring",
+    "planning"
+  ]
+}

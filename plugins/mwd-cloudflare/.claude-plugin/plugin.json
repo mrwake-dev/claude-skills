@@ -1,0 +1,15 @@
+{
+  "name": "mwd-cloudflare",
+  "version": "1.0.0",
+  "description": "Prepare a website for Cloudflare Workers and run the first deploy",
+  "author": {
+    "name": "MrWakeCZ"
+  },
+  "homepage": "https://github.com/mrwake-dev/claude-skills#readme",
+  "repository": "https://github.com/mrwake-dev/claude-skills",
+  "keywords": [
+    "cloudflare-workers",
+    "wrangler",
+    "deploy"
+  ]
+}

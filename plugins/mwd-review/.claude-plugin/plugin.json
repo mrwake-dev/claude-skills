@@ -1,0 +1,17 @@
+{
+  "name": "mwd-review",
+  "version": "1.0.0",
+  "description": "Interactive code review for GitLab merge requests and GitHub pull requests, with an optional private report page",
+  "author": {
+    "name": "MrWakeCZ"
+  },
+  "homepage": "https://github.com/mrwake-dev/claude-skills#readme",
+  "repository": "https://github.com/mrwake-dev/claude-skills",
+  "keywords": [
+    "code-review",
+    "github",
+    "gitlab",
+    "pull-requests",
+    "merge-requests"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "mwd-git",
+  "version": "1.0.0",
+  "description": "Merge request chores: resolve review comments, write the description, rebase onto the target branch",
+  "author": {
+    "name": "MrWakeCZ"
+  },
+  "homepage": "https://github.com/mrwake-dev/claude-skills#readme",
+  "repository": "https://github.com/mrwake-dev/claude-skills",
+  "keywords": [
+    "git",
+    "github",
+    "gitlab",
+    "merge-requests",
+    "rebase"
+  ]
+}

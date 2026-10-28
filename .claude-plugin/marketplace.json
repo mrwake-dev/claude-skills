@@ -7,8 +7,31 @@
   "plugins": [
     {
       "name": "mwd",
-      "source": "./",
-      "description": "MR/PR review, security audits, artifact pages and refactoring agents for Claude Code"
+      "source": "./plugins/mwd"
+    },
+    {
+      "name": "mwd-review",
+      "source": "./plugins/mwd-review"
+    },
+    {
+      "name": "mwd-git",
+      "source": "./plugins/mwd-git"
+    },
+    {
+      "name": "mwd-security",
+      "source": "./plugins/mwd-security"
+    },
+    {
+      "name": "mwd-cloudflare",
+      "source": "./plugins/mwd-cloudflare"
+    },
+    {
+      "name": "mwd-docs",
+      "source": "./plugins/mwd-docs"
+    },
+    {
+      "name": "mwd-agents",
+      "source": "./plugins/mwd-agents"
     }
   ]
 }

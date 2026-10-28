@@ -1,0 +1,13 @@
+{
+  "name": "mwd",
+  "version": "1.0.0",
+  "description": "Pick which mrwake-dev plugins to install and check the tools they need",
+  "author": {
+    "name": "MrWakeCZ"
+  },
+  "homepage": "https://github.com/mrwake-dev/claude-skills#readme",
+  "repository": "https://github.com/mrwake-dev/claude-skills",
+  "keywords": [
+    "setup"
+  ]
+}

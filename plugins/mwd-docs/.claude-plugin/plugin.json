@@ -1,0 +1,15 @@
+{
+  "name": "mwd-docs",
+  "version": "1.0.0",
+  "description": "Shorten JSDoc comments and check Markdown grammar and readability",
+  "author": {
+    "name": "MrWakeCZ"
+  },
+  "homepage": "https://github.com/mrwake-dev/claude-skills#readme",
+  "repository": "https://github.com/mrwake-dev/claude-skills",
+  "keywords": [
+    "jsdoc",
+    "markdown",
+    "documentation"
+  ]
+}
