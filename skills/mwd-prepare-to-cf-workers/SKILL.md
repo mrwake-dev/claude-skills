@@ -89,7 +89,7 @@ Read `references/project-types.md` for the per-type `wrangler.jsonc`, `html_hand
 1. Run the project's lint, typecheck and build, if present, and confirm the output has the expected files (`404.html`, `_headers`, each route's HTML).
 2. Start `wrangler dev` in the background, or through the preview tooling if available. Check it with the bundled script, which takes `path=status` or `'path=status>redirect-target'` and `--header 'name=value'`, and exits non-zero on any failure:
    ```bash
-   S=~/.claude/skills/mwd-prepare-to-cf-workers/scripts/check-site.sh
+   S=${CLAUDE_PLUGIN_ROOT}/skills/mwd-prepare-to-cf-workers/scripts/check-site.sh
    # Asset routes: every route, an unknown URL, the trailing-slash redirect, and the headers you added
    bash $S http://localhost:<port> /=200 /about=200 /does-not-exist=404 '<redirect check>' \
      --header 'x-content-type-options=nosniff' --header 'x-robots-tag=noindex'

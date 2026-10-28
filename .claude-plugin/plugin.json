@@ -1,0 +1,8 @@
+{
+  "name": "mwd",
+  "description": "MR/PR review, security audits, artifact pages and refactoring agents for Claude Code",
+  "author": {
+    "name": "MrWakeCZ"
+  },
+  "repository": "https://github.com/mrwake-dev/claude-skills"
+}

@@ -1,24 +1,42 @@
 # Claude Skills
 
-A collection of custom skills, agents, and slash commands for Claude Code — reusable, shareable definitions that extend Claude Code's capabilities. Each is a Markdown file with a structured prompt and workflow, symlinked into `~/.claude` to make it available across every project.
+A collection of custom skills, agents, and slash commands for Claude Code — reusable, shareable definitions that extend Claude Code's capabilities. Each is a Markdown file with a structured prompt and workflow, shipped together as the `mwd` Claude Code plugin so they are available across every project.
 
 ## Installation
 
-Clone the repo, then symlink both directories into `~/.claude`:
+The repo is its own plugin marketplace, `mrwake-dev`, listing one plugin, `mwd`. In a Claude Code session:
 
-```sh
-REPO=~/Documents/develop/mrwake-dev/claude-skills   # wherever you cloned it
-
-ln -s "$REPO/skills" ~/.claude/skills
-ln -s "$REPO/agents" ~/.claude/agents
+```text
+/plugin marketplace add mrwake-dev/claude-skills
+/plugin install mwd@mrwake-dev
 ```
 
-If either already exists as a real directory, move it aside first — `ln -s` into an existing
-directory silently creates `~/.claude/skills/skills` instead of failing. Check with
-`ls -la ~/.claude | grep -E 'skills|agents'`; each should be a `->` symlink to this repo.
+Every skill and agent takes the plugin's prefix: run `/mwd:mwd-code-review-interactive`, and the agents
+are `mwd:code-explorer`, `mwd:mwd-review-correctness` and so on.
 
-`/mwd-code-review-interactive` builds its report page from `/mwd-create-artifact`, so keep both skills
-installed — it resolves the sibling directory under `skills/`.
+To edit the skills, add the marketplace from your clone instead of GitHub. Claude Code then loads the
+plugin straight from the clone, and `/reload-plugins` picks up an edit without a release:
+
+```text
+/plugin marketplace add ~/Documents/develop/mrwake-dev/claude-skills
+```
+
+### Updates
+
+`plugin.json` sets no `version`, so every pushed commit is a new release. Auto-update is off for this
+marketplace until you select it under **Marketplaces** in `/plugin` and choose **Enable auto-update**;
+without it, `/plugin marketplace update mrwake-dev` pulls the latest. On a machine without a GitHub SSH
+key, set `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1`: updates started inside a session don't fall back to HTTPS.
+
+### Migrating from the symlink install
+
+Remove the old `~/.claude/skills` and `~/.claude/agents` symlinks after installing the plugin, or every
+skill and agent loads twice, with and without the `mwd:` prefix. Without a trailing slash, `rm` deletes
+only the links:
+
+```sh
+rm ~/.claude/skills ~/.claude/agents
+```
 
 ## Prerequisites
 
