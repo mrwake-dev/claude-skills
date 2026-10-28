@@ -6,6 +6,9 @@
     They install together as one plugin, <code>mwd</code>.
   </p>
   <p>
+    <a href="https://github.com/mrwake-dev/claude-skills/releases"><img src="https://img.shields.io/github/v/release/mrwake-dev/claude-skills" alt="Latest release"></a>
+  </p>
+  <p>
     <a href="#install">Install</a> ·
     <a href="#skills">Skills</a> ·
     <a href="#agents">Agents</a> ·
@@ -253,7 +256,8 @@ without waiting for a release.
 
 You get a new version only when a release raises the version number in `.claude-plugin/plugin.json`.
 Commits pushed to `main` between releases don't reach installed copies. A plugin added from a local
-clone is the exception: it always uses the files on disk.
+clone is the exception: it always uses the files on disk. Each version's changes are listed on the
+[Releases](https://github.com/mrwake-dev/claude-skills/releases) page.
 
 Automatic updates are off until you turn them on. Open `/plugin`, go to **Marketplaces**, select
 `mrwake-dev` and choose **Enable auto-update**. To update by hand instead, run:
