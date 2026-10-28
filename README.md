@@ -70,6 +70,38 @@ Install only the tools your plugins need. `/mwd:setup` lists the ones that are m
 brew install gh glab jq
 ```
 
+On Linux without Homebrew, take `git` and `jq` from your distribution, and `gh` from GitHub's own package
+repository, as its [Linux install guide](https://github.com/cli/cli/blob/trunk/docs/install_linux.md)
+describes. GitLab supports `glab` on Linux only through Homebrew, so the commands below use community
+packages for it.
+
+Debian and Ubuntu, with `glab` from its community [snap](https://snapcraft.io/glab) (on Debian, install
+`snapd` first, or take a `.deb` from [glab's releases](https://gitlab.com/gitlab-org/cli/-/releases)):
+
+```sh
+sudo apt update && sudo apt install git jq -y
+(type -p wget >/dev/null || (sudo apt update && sudo apt install wget -y)) \
+	&& sudo mkdir -p -m 755 /etc/apt/keyrings \
+	&& out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+	&& cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+	&& sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+	&& sudo mkdir -p -m 755 /etc/apt/sources.list.d \
+	&& echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+	&& sudo apt update \
+	&& sudo apt install gh -y
+sudo snap install glab
+```
+
+Fedora, where `glab` is a community package in the distribution's own repositories. These are the DNF5
+commands; run `dnf --version`, and if it reports DNF4, use the DNF4 commands from GitHub's guide instead:
+
+```sh
+sudo dnf install git jq glab
+sudo dnf install dnf5-plugins
+sudo dnf config-manager addrepo --from-repofile=https://cli.github.com/packages/rpm/gh-cli.repo
+sudo dnf install gh
+```
+
 For `node`, keep the one your version manager (such as nvm) already provides, or download it from
 [nodejs.org](https://nodejs.org/en/download).
 
