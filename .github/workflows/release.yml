@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Part of the version to bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      MANIFEST: .claude-plugin/plugin.json
+    steps:
+      - name: Require main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run this workflow on main"
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Compute version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          current=$(jq -r .version "$MANIFEST")
+          [[ "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$MANIFEST version \"$current\" is not X.Y.Z"; exit 1; }
+          IFS=. read -r major minor patch <<< "$current"
+          case "$BUMP" in
+            major) version="$((major + 1)).0.0" ;;
+            minor) version="$major.$((minor + 1)).0" ;;
+            *) version="$major.$minor.$((patch + 1))" ;;
+          esac
+          if git rev-parse -q --verify "refs/tags/$version" > /dev/null; then
+            echo "::error::Tag $version already exists"
+            exit 1
+          fi
+          echo "$current -> $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Commit, tag and push
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          jq --arg version "$VERSION" '.version = $version' "$MANIFEST" > "$RUNNER_TEMP/plugin.json"
+          mv "$RUNNER_TEMP/plugin.json" "$MANIFEST"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$MANIFEST"
+          git commit -m "release: $VERSION"
+          git tag "$VERSION"
+          git push --atomic origin HEAD:refs/heads/main "refs/tags/$VERSION"
+
+      # GITHUB_TOKEN pushes never trigger workflows; a dispatch does.
+      - name: Start Changelog
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh workflow run changelog.yml --ref "$VERSION" || { sleep 10; gh workflow run changelog.yml --ref "$VERSION"; }

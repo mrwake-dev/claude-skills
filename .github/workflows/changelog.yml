@@ -1,0 +1,42 @@
+name: Changelog
+
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changelog
+  cancel-in-progress: false
+
+jobs:
+  changelog:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      issues: read # release-changelog's closed-issues GraphQL query
+      pull-requests: read # and its per-commit PR lookup
+    steps:
+      - name: Validate tag and look for an existing release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Tag $GITHUB_REF_NAME is not X.Y.Z"; exit 1; }
+          # Users only receive a release whose plugin.json carries its version.
+          manifest=$(gh api -H 'Accept: application/vnd.github.raw+json' "repos/$GH_REPO/contents/.claude-plugin/plugin.json?ref=$GITHUB_REF_NAME" | jq -r .version)
+          [ "$manifest" = "$GITHUB_REF_NAME" ] || { echo "::error::plugin.json at $GITHUB_REF_NAME says version \"$manifest\""; exit 1; }
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then echo "exists=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Create GitHub release
+        if: steps.release.outputs.exists != 'true'
+        uses: mrwake-dev/release-changelog@v2.0.5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: mwd ${{ github.ref_name }}

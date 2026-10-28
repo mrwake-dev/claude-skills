@@ -23,10 +23,28 @@ plugin straight from the clone, and `/reload-plugins` picks up an edit without a
 
 ### Updates
 
-`plugin.json` sets no `version`, so every pushed commit is a new release. Auto-update is off for this
-marketplace until you select it under **Marketplaces** in `/plugin` and choose **Enable auto-update**;
-without it, `/plugin marketplace update mrwake-dev` pulls the latest. On a machine without a GitHub SSH
-key, set `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1`: updates started inside a session don't fall back to HTTPS.
+Users get an update only when a release raises `version` in `.claude-plugin/plugin.json`; a push to
+`main` without a release doesn't reach them. An install from a local clone is the exception: it always
+loads the files on disk. Auto-update is off for this marketplace until you select it under
+**Marketplaces** in `/plugin` and choose **Enable auto-update**; without it,
+`/plugin marketplace update mrwake-dev` pulls the latest. On a machine without a GitHub SSH key, set
+`CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1`: updates started inside a session don't fall back to HTTPS.
+
+### Releasing
+
+Run the **Release** workflow on `main` and pick `patch`, `minor` or `major`, either from the Actions tab
+or with:
+
+```sh
+gh workflow run release.yml -f bump=patch
+```
+
+It raises `version` in `plugin.json`, commits `release: X.Y.Z`, tags `X.Y.Z` and pushes both. It then
+starts **Changelog**, which publishes a GitHub release whose notes group the commits since the previous
+tag by type: `feat`, `fix`, `docs` and so on.
+
+Pushing an `X.Y.Z` tag yourself also publishes a release, but only when `plugin.json` at that tag already
+has that version. Otherwise the release would exist on GitHub and never reach users.
 
 ### Migrating from the symlink install
 
