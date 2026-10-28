@@ -5,5 +5,16 @@
   "author": {
     "name": "MrWakeCZ"
   },
-  "repository": "https://github.com/mrwake-dev/claude-skills"
+  "homepage": "https://github.com/mrwake-dev/claude-skills#readme",
+  "repository": "https://github.com/mrwake-dev/claude-skills",
+  "keywords": [
+    "code-review",
+    "github",
+    "gitlab",
+    "pull-requests",
+    "security",
+    "dependabot",
+    "rebase",
+    "cloudflare-workers"
+  ]
 }
