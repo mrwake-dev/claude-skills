@@ -358,6 +358,9 @@ Each plugin is a folder under `plugins/`, with its skills in `skills/<name>/SKIL
 Claude Code then reads every plugin straight from your clone, so `/reload-plugins` picks up an edit
 without waiting for a release. Pick "All six plugins" in `/mwd:setup` to have everything installed.
 
+The [contributing guide](docs/CONTRIBUTING.md) covers naming, the frontmatter fields, the rules every skill
+follows, and the commit format the release notes depend on.
+
 ### Updates
 
 All plugins share one version number, set in each `plugins/*/.claude-plugin/plugin.json`. You get a new
