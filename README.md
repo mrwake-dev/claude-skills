@@ -172,25 +172,13 @@ stay installed; remove them with `brew` or `winget` if nothing else uses them.
 ## Moving from the symlink setup
 
 Older versions of this README told you to clone the repo and symlink its `skills/` and `agents/` folders
-into `~/.claude`. To switch to the plugin:
+into `~/.claude`. The plugin replaces both, so once you've moved over you can delete the clone.
 
-1. Update your clone, so it has the plugin files in `.claude-plugin/`:
+If you edit the skills, keep the clone: do step 1, add your clone as described in
+[Working on the skills](#working-on-the-skills) instead of step 2, and finish with step 4.
 
-   ```sh
-   git -C ~/Documents/develop/mrwake-dev/claude-skills pull
-   ```
-
-2. Add the plugin. Use your clone as the source if you edit the skills. If you only use them, add
-   `mrwake-dev/claude-skills` instead, and you can delete the clone afterwards.
-
-   ```sh
-   claude plugin marketplace add ~/Documents/develop/mrwake-dev/claude-skills
-   claude plugin install mwd@mrwake-dev
-   ```
-
-3. Replace the symlinks with real folders. Until you do, every skill and agent shows up twice, with and
-   without the `mwd:` prefix. First check that each one is a link to your clone (it shows an arrow,
-   `->`):
+1. Replace the symlinks with real folders. First check that each one is a link to your clone (it shows
+   an arrow, `->`):
 
    ```sh
    ls -ld ~/.claude/skills ~/.claude/agents ~/.claude/commands
@@ -215,18 +203,25 @@ into `~/.claude`. To switch to the plugin:
    If `LinkType` is empty, that folder is a copy rather than a link. Rename it instead, and move back
    anything you still need.
 
-4. Keep files that only lived in your clone. An install from GitHub contains only committed files, so
-   skills or agents you kept in the clone without committing them won't load. List them, and copy the
-   ones you want into the new `~/.claude/skills` or `~/.claude/agents`:
+2. Install the plugin from GitHub:
 
    ```sh
-   git -C ~/Documents/develop/mrwake-dev/claude-skills status --ignored --short skills agents
+   claude plugin marketplace add mrwake-dev/claude-skills
+   claude plugin install mwd@mrwake-dev
    ```
 
-   If your clone is the source, skip this step. Claude Code reads the clone as it is on disk, so those
-   files keep loading under the `mwd:` prefix.
+   On a machine without a GitHub SSH key, set `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` first, as described in
+   [Add the plugin](#add-the-plugin).
 
-5. Switch to the new names. Start a new session, or run `/reload-plugins`, and check that
+3. Delete the clone. Nothing loads from it anymore:
+
+   ```sh
+   rm -rf ~/Documents/develop/mrwake-dev/claude-skills   # wherever you cloned it
+   ```
+
+   In PowerShell, run `Remove-Item -Recurse -Force <path-to-your-clone>`.
+
+4. Switch to the new names. Start a new session, or run `/reload-plugins`, and check that
    `claude plugin list` shows `mwd@mrwake-dev` as enabled. Every name now has the plugin's prefix:
 
    | Before                         | After                              |
@@ -238,8 +233,8 @@ into `~/.claude`. To switch to the plugin:
    `subagent_type` or a shell alias.
 
 To undo the switch, run `claude plugin marketplace remove mrwake-dev`, which also uninstalls the plugin.
-Then move out anything you put in `~/.claude/skills` and `~/.claude/agents`, delete both folders, and
-link the clone's `skills/` and `agents/` folders into `~/.claude` again.
+Then clone the repo again, move out anything you put in `~/.claude/skills` and `~/.claude/agents`,
+delete both folders, and link the clone's `skills/` and `agents/` folders into `~/.claude`.
 
 ## Development
 
