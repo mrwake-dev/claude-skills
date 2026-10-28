@@ -144,7 +144,7 @@ body { background: var(--bg); }
 .card--accent { box-shadow: none; }
 tbody tr:hover td { background: transparent; }
 
-.mono { font-family: var(--font-mono); font-size: 0.92em; }
+.mono { font-family: var(--font-mono); font-size: 0.92em; overflow-wrap: anywhere; }
 .sevbar { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(var(--space) * 3);
           margin-top: calc(var(--space) * 3); padding: calc(var(--space) * 1.5) 0;
           border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
@@ -154,7 +154,8 @@ tbody tr:hover td { background: transparent; }
 .sev--warn b { color: var(--warn); }
 .sev--zero b { color: var(--muted); font-weight: 500; }
 .sevbar .sev--push { margin-left: auto; }
-.findings { display: grid; gap: calc(var(--space) * 2); }
+/* minmax(0, 1fr): a long code line scrolls inside its block instead of widening every card past the page. */
+.findings { display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--space) * 2); }
 .finding__head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .finding__head h3 { flex: 1 1 260px; margin: 0; }
 .finding__id { color: var(--muted); font: 500 12px var(--font-mono); }
