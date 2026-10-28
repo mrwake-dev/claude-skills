@@ -39,4 +39,4 @@ jobs:
         uses: mrwake-dev/release-changelog@v2.0.5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          title: mwd ${{ github.ref_name }}
+          title: claude-skills ${{ github.ref_name }}
