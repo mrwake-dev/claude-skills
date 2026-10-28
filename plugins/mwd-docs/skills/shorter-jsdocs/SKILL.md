@@ -28,11 +28,23 @@ Arguments in `$ARGUMENTS`:
 
 ### Step 1: Resolve scope
 
+Find the default branch on the branch's own remote. Never assume it's called `origin`:
+
 ```bash
-BASE=$(git merge-base HEAD "$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/master)")
+UPSTREAM="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)"   # e.g. github/feat-x
+REMOTE="${UPSTREAM%%/*}"
+[ -n "$REMOTE" ] || { [ "$(git remote | wc -l | tr -d ' ')" = 1 ] && REMOTE="$(git remote)"; }
+BASE_REF="$(git symbolic-ref --quiet --short "refs/remotes/$REMOTE/HEAD" 2>/dev/null)"
+[ -n "$BASE_REF" ] || for c in "$REMOTE/main" "$REMOTE/master" main master; do
+  git rev-parse --verify --quiet "$c" >/dev/null && { BASE_REF="$c"; break; }
+done
+[ -n "$BASE_REF" ] || { echo "cannot determine the base branch" >&2; exit 1; }
+BASE="$(git merge-base HEAD "$BASE_REF")" || { echo "no merge base with $BASE_REF" >&2; exit 1; }
+echo "base=$BASE_REF merge-base=$BASE"
 ```
 
-State the base ref you resolved in your reply. Then collect changed files:
+If either check fails, stop and ask the user which branch to compare against. Never fall back to a
+different set of files. State the base ref you resolved in your reply. Then collect changed files:
 
 | Mode | Command |
 |:--|:--|
