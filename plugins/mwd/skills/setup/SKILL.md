@@ -26,10 +26,14 @@ from it.
 
 ## Step 1: See what's installed
 
-Each bash block runs in a fresh shell, so resolve `claude` with a fallback to the native installer's path:
+Each bash block runs in a fresh shell, so resolve `claude` in every block. Prefer the binary running this
+session, then a `claude` on `PATH`, then the native installer's path. When `claude` is a shell function or
+alias, `command -v` prints just the name, so only accept an absolute path from it:
 
 ```bash
-CLAUDE="$(command -v claude || echo "$HOME/.local/bin/claude")"
+CLAUDE="${CLAUDE_CODE_EXECPATH:-}"
+[ -x "$CLAUDE" ] || CLAUDE="$(command -v claude)"
+case "$CLAUDE" in /*) ;; *) CLAUDE="$HOME/.local/bin/claude" ;; esac
 [ -x "$CLAUDE" ] || { echo "claude CLI not found"; exit 1; }
 "$CLAUDE" plugin list --json
 ```
