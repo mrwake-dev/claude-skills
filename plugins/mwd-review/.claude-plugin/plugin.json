@@ -1,6 +1,6 @@
 {
   "name": "mwd-review",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Interactive code review for GitLab merge requests and GitHub pull requests, with an optional private report page",
   "author": {
     "name": "MrWakeCZ"

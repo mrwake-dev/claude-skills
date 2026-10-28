@@ -1,6 +1,6 @@
 {
   "name": "mwd-security",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Security audits for Dependabot alerts, Node.js dependencies and Java code",
   "author": {
     "name": "MrWakeCZ"
