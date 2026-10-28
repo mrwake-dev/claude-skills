@@ -152,6 +152,23 @@ Claude pick.
 | `mwd:refactor-cleaner` | Finds unused code with knip, depcheck and ts-prune, and removes it. |
 | `mwd:mwd-review-*` | Six reviewers, one per area: correctness, security, docs, language, device and platform scripts. The code review skill starts them on large changes; you don't call them yourself. |
 
+## Uninstall
+
+To remove the plugin but keep the `mrwake-dev` marketplace registered, so you can reinstall it later:
+
+```sh
+claude plugin uninstall mwd@mrwake-dev
+```
+
+To remove everything, run this instead. It removes the marketplace and uninstalls the plugin with it:
+
+```sh
+claude plugin marketplace remove mrwake-dev
+```
+
+Both commands work the same on macOS, Linux and Windows. The command-line tools from the install steps
+stay installed; remove them with `brew` or `winget` if nothing else uses them.
+
 ## Moving from the symlink setup
 
 Older versions of this README told you to clone the repo and symlink its `skills/` and `agents/` folders
