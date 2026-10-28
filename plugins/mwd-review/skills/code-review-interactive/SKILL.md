@@ -81,6 +81,16 @@ fails with an auth error.
 
 ### Step 1: Get the change details
 
+**Start with a folder for this run.** Every temp file of the review goes into it, so two reviews
+running at the same time, in two sessions, never overwrite or delete each other's files:
+
+```bash
+mktemp -d "${TMPDIR:-/tmp}/mwd-review.XXXXXX"
+```
+
+Write the printed path literally wherever this skill and its references say `<run-dir>`. Step 4.4
+removes the folder at the end of the run.
+
 #### Remote mode
 
 Parse the URL and fetch the metadata, diff, commits, existing inline comments, and positioning data
@@ -91,7 +101,7 @@ gives the exact `glab`/`gh` commands, URL-parsing rules, and how to derive the p
 Regardless of platform, you must come away from this step with:
 
 - **Metadata** — title, description, author, labels, state.
-- **The diff saved to a temp file** (`/tmp/mr-<iid>.diff` or `/tmp/pr-<number>.diff`) — do NOT dump
+- **The diff saved to a temp file** (`<run-dir>/change.diff`) — do NOT dump
   it straight into context (see "Large changes").
 - **Commit history.**
 - **Existing inline review comments** (for re-run awareness, below).
@@ -120,8 +130,12 @@ The base is the merge-base with the repo's default branch, or the ref the user n
 git rev-parse --is-inside-work-tree >/dev/null || { echo "not a git repo"; exit 1; }
 BASE_REF="<the ref after 'local', if the user gave one>"
 if [ -z "$BASE_REF" ]; then
-  BASE_REF="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)"    # e.g. origin/main
-  [ -n "$BASE_REF" ] || for c in origin/main origin/master main master; do
+  # The branch's own remote, else the only remote; never assume it's called origin
+  UPSTREAM="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)"         # e.g. github/feat-x
+  REMOTE="${UPSTREAM%%/*}"
+  [ -n "$REMOTE" ] || { [ "$(git remote | wc -l | tr -d ' ')" = 1 ] && REMOTE="$(git remote)"; }
+  BASE_REF="$(git symbolic-ref --quiet --short "refs/remotes/$REMOTE/HEAD" 2>/dev/null)"  # e.g. github/main
+  [ -n "$BASE_REF" ] || for c in "$REMOTE/main" "$REMOTE/master" main master; do
     git rev-parse --verify --quiet "$c" >/dev/null && { BASE_REF="$c"; break; }
   done
 fi
@@ -129,7 +143,7 @@ fi
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 HEAD_SHA="$(git rev-parse HEAD)"
 MERGE_BASE="$(git merge-base "$BASE_REF" HEAD)" || { echo "no merge base with $BASE_REF"; exit 1; }
-DIFF="/tmp/local-$(printf '%s' "$BRANCH" | tr '/' '-')-$(git rev-parse --short HEAD).diff"
+DIFF="<run-dir>/change.diff"
 git diff "$MERGE_BASE" HEAD > "$DIFF"
 wc -l "$DIFF"
 git log --format='%h %an %s' "$MERGE_BASE"..HEAD      # commit history + intent
@@ -150,7 +164,7 @@ not the platform:
 | Remote-mode input        | Local-mode equivalent                                                          |
 |:--------------------------|:--------------------------------------------------------------------------------|
 | Metadata                 | branch name as the title, `git log -1 --format='%an'` as the author; no labels, no state |
-| Diff temp file           | `/tmp/local-<branch>-<short-sha>.diff` as above                                |
+| Diff temp file           | `<run-dir>/change.diff`, the same path as Remote mode                          |
 | Commit history           | `git log "$MERGE_BASE"..HEAD` — also the **intent context** a description would give |
 | Existing inline comments | none — **re-run awareness does not apply**, so nothing is ever "already raised" |
 | Positioning data         | not needed; nothing is posted. Findings still carry `file:line` for the report |
@@ -250,7 +264,7 @@ Subagents **never** interact with the user or with GitLab/GitHub — no question
 
 **Each subagent prompt must be self-contained.** Include:
 
-- the temp diff path (`/tmp/mr-<iid>.diff` or `/tmp/pr-<number>.diff`) — and for very large diffs, which file slices this dimension should read;
+- the temp diff path (`<run-dir>/change.diff`) — and for very large diffs, which file slices this dimension should read;
 - the absolute path(s) of its rule file(s) — the agent reads and applies **only** those, bullet by bullet;
 - the **pre-scan hits for its rule file(s)** as `file:line:text`, which it must each either raise as a finding or explicitly dismiss with a reason — no hit may go unmentioned in its result;
 - on a `build` run, the **build and lint diagnostics this dimension owns** (per the table in `references/build-check.md`), as `file:line:text` under that same accounting rule, each marked `new` or `pre-existing` from the join;
@@ -395,6 +409,14 @@ claude.ai page** of the whole review is published first, so the summary can link
 posted to GitLab/GitHub. **Read `references/report.md` now** and follow its 4.4.a section (the artifact
 page — skipped entirely without the token, and never replaced by a local file) and its 4.4.b section
 (the one-screen chat summary, in both modes and with or without the page).
+
+Then remove the run folder, on every run, whether or not anything was posted:
+
+```bash
+rm -rf "<run-dir>"
+```
+
+Remove only that folder. Other reviews running in other sessions have folders of their own.
 
 ---
 

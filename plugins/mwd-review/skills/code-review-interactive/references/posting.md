@@ -97,9 +97,5 @@ record its direct link for the Step 4.4 summary, and if a line cannot be positio
 reference's fallback ladder (alternate anchor → file-level comment → ask the user). Never silently
 downgrade an inline-only finding to a plain comment without asking.
 
-**Clean up** the diff temp files after all inline comments are posted (use whichever names Step 1
-created). Leave it to the end of the run — nothing below needs the diff:
-
-```bash
-rm -f /tmp/mr-inline-comment.json /tmp/pr-inline-comment.json /tmp/mr-*.diff /tmp/pr-*.diff /tmp/mr-*.added /tmp/pr-*.added
-```
+**No clean-up here.** Step 4.4 removes the whole `<run-dir>` at the end of the run. Never delete temp
+files by pattern: another review may still be using them.

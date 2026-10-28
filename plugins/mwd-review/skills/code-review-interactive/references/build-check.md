@@ -51,7 +51,7 @@ Run only the tools matching the rule files Step 2 detected, from the repo root, 
 | `java.md` | **not run by default** — a Maven/Gradle compile takes minutes and usually needs the network. Record `not run (build too expensive)` unless the user asked for it explicitly | — |
 
 ```bash
-timeout 300 node_modules/.bin/tsc -p tsconfig.json --noEmit --pretty false > /tmp/mwd-build-tsc.log 2>&1
+timeout 300 node_modules/.bin/tsc -p tsconfig.json --noEmit --pretty false > "<run-dir>/build-tsc.log" 2>&1
 echo "tsc exit $?"
 ```
 
@@ -70,20 +70,20 @@ one join works for all of them:
 
 ```bash
 # tsc
-sed -nE 's#^([^(]+)\(([0-9]+),[0-9]+\): #\1:\2:#p' /tmp/mwd-build-tsc.log
+sed -nE 's#^([^(]+)\(([0-9]+),[0-9]+\): #\1:\2:#p' "<run-dir>/build-tsc.log"
 # eslint --format unix, go vet, shellcheck -f gcc: already file:line:col:…, drop the column
-sed -nE "s#^${PWD}/##; s#^\./##; s#^([^:]+):([0-9]+):[0-9]+: #\1:\2:#p" /tmp/mwd-build-<tool>.log
+sed -nE "s#^${PWD}/##; s#^\./##; s#^([^:]+):([0-9]+):[0-9]+: #\1:\2:#p" "<run-dir>/build-<tool>.log"
 ```
 
-Collect them all into `/tmp/mwd-build.diag`. Then split them against `$ADDED` — the flatten file the
+Collect them all into `<run-dir>/build.diag`. Then split them against `$ADDED` — the flatten file the
 pre-scan already wrote (`pre-scan.md` §"Flatten the diff"; run that block first if you have not yet,
 it is idempotent):
 
 ```bash
 ADDED="${DIFF%.diff}.added"
-awk -F: 'NR==FNR { a[$1 ":" $2]; next } ($1 ":" $2) in a'    "$ADDED" /tmp/mwd-build.diag > /tmp/mwd-build.new
-awk -F: 'NR==FNR { a[$1 ":" $2]; next } !(($1 ":" $2) in a)' "$ADDED" /tmp/mwd-build.diag > /tmp/mwd-build.other
-wc -l /tmp/mwd-build.new /tmp/mwd-build.other
+awk -F: 'NR==FNR { a[$1 ":" $2]; next } ($1 ":" $2) in a'    "$ADDED" "<run-dir>/build.diag" > "<run-dir>/build.new"
+awk -F: 'NR==FNR { a[$1 ":" $2]; next } !(($1 ":" $2) in a)' "$ADDED" "<run-dir>/build.diag" > "<run-dir>/build.other"
+wc -l "<run-dir>/build.new" "<run-dir>/build.other"
 ```
 
 **`mwd-build.new` is new by construction.** Those lines did not exist before this change, so a

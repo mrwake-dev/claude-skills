@@ -28,8 +28,8 @@ GLAB="$(command -v glab || echo /opt/homebrew/bin/glab)"
 "$GLAB" mr view <iid> -R <group/namespace/repo> -F json
 
 # Save the diff to a temp file — do NOT dump it straight into context (see SKILL.md "Large MRs")
-"$GLAB" mr diff <iid> -R <group/namespace/repo> --raw > /tmp/mr-<iid>.diff
-wc -l /tmp/mr-<iid>.diff
+"$GLAB" mr diff <iid> -R <group/namespace/repo> --raw > "<run-dir>/change.diff"
+wc -l "<run-dir>/change.diff"
 
 # Fetch commit history
 "$GLAB" api "projects/<url-encoded-project>/merge_requests/<iid>/commits"
@@ -39,7 +39,7 @@ wc -l /tmp/mr-<iid>.diff
 ```
 
 **Large MRs**: if the saved diff is under ~2,000 lines, read the temp file whole. Otherwise review it
-file-by-file: list the boundaries with `grep -n '^diff --git' /tmp/mr-<iid>.diff`, then read one
+file-by-file: list the boundaries with `grep -n '^diff --git' "<run-dir>/change.diff"`, then read one
 file's slice at a time. If the diff looks truncated (far fewer files than `changes_count`), check
 `GET .../merge_requests/<iid>/changes` for `"overflow": true` and fetch the missing files via the
 paginated `.../merge_requests/<iid>/diffs?per_page=20&page=N` endpoint.
@@ -101,11 +101,11 @@ done
   --arg base "$BASE_SHA" --arg head "$HEAD_SHA" --arg start "$START_SHA" \
   --arg op "src/foo.ts" --arg np "src/foo.ts" \
   '{body:$body, position:{position_type:"text", base_sha:$base, head_sha:$head, start_sha:$start, old_path:$op, new_path:$np, new_line:42}}' \
-  > /tmp/mr-inline-comment.json
+  > "<run-dir>/comment.json"
 
 # 3) Post the inline comment and capture the response
 RESPONSE=$("$GLAB" api "projects/$PROJECT_ENCODED/merge_requests/<iid>/discussions" \
-  -X POST -H "Content-Type: application/json" --input /tmp/mr-inline-comment.json)
+  -X POST -H "Content-Type: application/json" --input "<run-dir>/comment.json")
 
 # 4) Verify + collect the note id for the summary link
 echo "$RESPONSE" | "$JQ" -r '.notes[0] | "type=\(.type) note_id=\(.id)"'
@@ -135,8 +135,4 @@ verify check fails:
    inline-only. Ask the user whether to post it as a regular MR comment or keep it in chat. In the
    summary, state which fallback level each posted finding ended up at.
 
-**Clean up** the temp files after all inline comments are posted:
-
-```bash
-rm -f /tmp/mr-inline-comment.json /tmp/mr-<iid>.diff
-```
+**No clean-up here.** Step 4.4 removes `<run-dir>` at the end of the run.

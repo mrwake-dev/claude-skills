@@ -9,7 +9,7 @@ Flatten the saved diff into one `file:new_line:added_text` record per added line
 then runs against that one file, and each hit already carries the new-side anchor data Step 4 needs:
 
 ```bash
-DIFF=/tmp/mr-<iid>.diff                  # or /tmp/pr-<number>.diff, or /tmp/local-<branch>-<sha>.diff
+DIFF="<run-dir>/change.diff"             # the same path in both modes
 ADDED="${DIFF%.diff}.added"
 awk '
   /^diff --git/ || /^index / || /^old mode/ || /^new mode/ { next }

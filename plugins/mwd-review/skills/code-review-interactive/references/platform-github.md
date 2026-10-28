@@ -29,8 +29,8 @@ GH="$(command -v gh || echo /opt/homebrew/bin/gh)"
   --json number,title,body,author,labels,headRefName,baseRefName,headRefOid,baseRefOid,state,url,changedFiles,files,commits,statusCheckRollup
 
 # Save the diff to a temp file — do NOT dump it straight into context (see SKILL.md "Large MRs")
-"$GH" pr diff <number> -R <owner/repo> > /tmp/pr-<number>.diff
-wc -l /tmp/pr-<number>.diff
+"$GH" pr diff <number> -R <owner/repo> > "<run-dir>/change.diff"
+wc -l "<run-dir>/change.diff"
 
 # Fetch commit history
 "$GH" api "repos/<owner>/<repo>/pulls/<number>/commits" --paginate
@@ -42,7 +42,7 @@ wc -l /tmp/pr-<number>.diff
 `--paginate` walks all pages automatically, so no manual page loop is needed.
 
 **Large PRs**: if the saved diff is under ~2,000 lines, read the temp file whole. Otherwise review it
-file-by-file: list the boundaries with `grep -n '^diff --git' /tmp/pr-<number>.diff`, then read one
+file-by-file: list the boundaries with `grep -n '^diff --git' "<run-dir>/change.diff"`, then read one
 file's slice at a time. `gh pr diff` returns the full unified diff without GitLab-style pagination
 overflow; if the PR is enormous, fetch per-file patches via
 `gh api "repos/<owner>/<repo>/pulls/<number>/files?per_page=100" --paginate` (each entry has a
@@ -97,11 +97,11 @@ done
 #    This example targets an ADDED line (side RIGHT). See variants below.
 "$JQ" -n --arg body "$BODY" --arg commit "$HEAD_SHA" --arg path "src/foo.ts" \
   '{body:$body, commit_id:$commit, path:$path, line:42, side:"RIGHT"}' \
-  > /tmp/pr-inline-comment.json
+  > "<run-dir>/comment.json"
 
 # 3) Post the inline comment and capture the response
 RESPONSE=$("$GH" api "repos/<owner>/<repo>/pulls/<number>/comments" \
-  -X POST --input /tmp/pr-inline-comment.json)
+  -X POST --input "<run-dir>/comment.json")
 
 # 4) Verify + collect the direct link for the summary
 echo "$RESPONSE" | "$JQ" -r '"id=\(.id) path=\(.path) line=\(.line) url=\(.html_url)"'
@@ -137,8 +137,4 @@ wrong side) or the verify check fails:
    (`gh pr comment <number> -R <owner/repo> --body-file …`) or keep it in chat. In the summary, state
    which fallback level each posted finding ended up at.
 
-**Clean up** the temp files after all inline comments are posted:
-
-```bash
-rm -f /tmp/pr-inline-comment.json /tmp/pr-<number>.diff
-```
+**No clean-up here.** Step 4.4 removes `<run-dir>` at the end of the run.
