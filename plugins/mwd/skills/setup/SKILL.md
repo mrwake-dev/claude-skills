@@ -20,7 +20,7 @@ from it.
 | `mwd-security`   | `/mwd-security:fix-dependabot-alerts`, `/mwd-security:node-security-audit`, `/mwd-security:java-security-check` | `gh`, `jq`, `node`  |
 | `mwd-cloudflare` | `/mwd-cloudflare:prepare-to-cf-workers`                                                        | `node`                        |
 | `mwd-docs`       | `/mwd-docs:shorter-jsdocs`, `/mwd-docs:markdown-check`                                         | `git`                         |
-| `mwd-agents`     | The `code-explorer`, `code-simplifier`, `diff-verifier`, `plan-critic`, `planner` and `refactor-cleaner` agents | none                          |
+| `mwd-agents`     | The `code-explorer`, `code-simplifier`, `diff-verifier`, `plan-critic`, `planner`, `refactor-cleaner` and `test-gap` agents | none                          |
 
 `mwd` itself holds only this skill. Never uninstall it here.
 
