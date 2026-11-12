@@ -1,7 +1,7 @@
 {
   "name": "mwd-agents",
   "version": "2.1.0",
-  "description": "General agents: codebase explorer, code simplifier, planner and dead-code cleaner",
+  "description": "General agents: codebase explorer, code simplifier, plan critic, planner and dead-code cleaner",
   "author": {
     "name": "MrWakeCZ"
   },
