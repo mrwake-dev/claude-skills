@@ -1,5 +1,6 @@
 {
   "name": "mwd",
+  "displayName": "MrWake",
   "version": "2.1.0",
   "description": "Pick which mrwake-dev plugins to install and check the tools they need",
   "author": {
