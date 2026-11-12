@@ -157,7 +157,7 @@ If Claude Code can't find Git Bash, tell it where `bash.exe` is in
 | `mwd-security`   | Dependabot fixes, Node.js and Java security audits                   | `gh`, `jq`, `node`              |
 | `mwd-cloudflare` | Preparing a website for Cloudflare Workers                           | `node`                          |
 | `mwd-docs`       | Trimming JSDoc comments, checking Markdown                           | `git`                           |
-| `mwd-agents`     | Five general agents: explorer, simplifier, plan critic, planner, dead-code cleaner | none                            |
+| `mwd-agents`     | Six general agents: explorer, simplifier, diff verifier, plan critic, planner, dead-code cleaner | none                            |
 
 `gh` covers GitHub and `glab` covers GitLab, so install the one for the platform you use, or both.
 
@@ -191,6 +191,7 @@ let Claude pick.
 |:------|:-------------|
 | `mwd-agents:code-explorer` | Traces how an existing feature works across the codebase before you build on it. It only reads code. |
 | `mwd-agents:code-simplifier` | Makes code clearer and more consistent without changing what it does. |
+| `mwd-agents:diff-verifier` | Checks a finished change against your request: what it misses, what it changes beyond the request and what it left stale. It never edits files. |
 | `mwd-agents:plan-critic` | Checks a plan against your request, the project's rules and the code before any code is written. It only reads code. |
 | `mwd-agents:planner` | Turns a feature, an architecture change or a refactor into a step-by-step plan. |
 | `mwd-agents:refactor-cleaner` | Finds unused code with knip, depcheck and ts-prune, and removes it. |
