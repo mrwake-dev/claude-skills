@@ -158,6 +158,7 @@ If Claude Code can't find Git Bash, tell it where `bash.exe` is in
 | `mwd-cloudflare` | Preparing a website for Cloudflare Workers                           | `node`                          |
 | `mwd-docs`       | Trimming JSDoc comments, checking Markdown                           | `git`                           |
 | `mwd-agents`     | Seven general agents: explorer, simplifier, diff verifier, plan critic, planner, dead-code cleaner, test-gap finder | none                            |
+| `mwd-agent-sidebar` | A side pane with a live card per subagent, a task progress bar and `/subagents` | none                            |
 
 `gh` covers GitHub and `glab` covers GitLab, so install the one for the platform you use, or both.
 
@@ -359,7 +360,7 @@ Each plugin is a folder under `plugins/`, with its skills in `skills/<name>/SKIL
 ```
 
 Claude Code then reads every plugin straight from your clone, so `/reload-plugins` picks up an edit
-without waiting for a release. Pick "All six plugins" in `/mwd:setup` to have everything installed.
+without waiting for a release. Pick "All seven plugins" in `/mwd:setup` to have everything installed.
 
 The [contributing guide](docs/CONTRIBUTING.md) covers naming, the frontmatter fields, the rules every skill
 follows, and the commit format the release notes depend on.

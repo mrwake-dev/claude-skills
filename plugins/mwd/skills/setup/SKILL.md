@@ -21,6 +21,7 @@ from it.
 | `mwd-cloudflare` | `/mwd-cloudflare:prepare-to-cf-workers`                                                        | `node`                        |
 | `mwd-docs`       | `/mwd-docs:shorter-jsdocs`, `/mwd-docs:markdown-check`                                         | `git`                         |
 | `mwd-agents`     | The `code-explorer`, `code-simplifier`, `diff-verifier`, `plan-critic`, `planner`, `refactor-cleaner` and `test-gap` agents | none                          |
+| `mwd-agent-sidebar` | A side pane with a live card per subagent, a task progress bar above the prompt and `/subagents` to open it | none                          |
 
 `mwd` itself holds only this skill. Never uninstall it here.
 
@@ -44,13 +45,13 @@ found, stop: tell the user to run the install commands from Step 4 in their own 
 ## Step 2: Ask which plugins they want
 
 Ask with AskUserQuestion, multi-select, in one call. The picker shows at most four options per question, so
-split the six plugins over two questions:
+split the seven plugins over two questions:
 
 1. `mwd-review`, `mwd-git`, `mwd-security`, `mwd-cloudflare`
-2. `mwd-docs`, `mwd-agents`, and a third option, "All six plugins"
+2. `mwd-docs`, `mwd-agents`, `mwd-agent-sidebar`, and a fourth option, "All seven plugins"
 
 Describe each option with the "What it adds" column in plain words, and add "(installed)" to the label of
-plugins that already are. "All six plugins" means every row of the table, whatever else was ticked.
+plugins that already are. "All seven plugins" means every row of the table, whatever else was ticked.
 
 ## Step 3: Ask about GitHub and GitLab
 

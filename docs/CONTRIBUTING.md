@@ -84,7 +84,7 @@ A skill that starts an agent uses its full name, `<plugin>:<name>`, such as `mwd
 ## Testing a change
 
 1. Add your clone as the marketplace instead of GitHub, as described in
-   [Working on the skills](../README.md#working-on-the-skills), and pick "All six plugins" in
+   [Working on the skills](../README.md#working-on-the-skills), and pick "All seven plugins" in
    `/mwd:setup`.
 2. After an edit, run `/reload-plugins` and try the skill.
 3. Before you push, run the same manifest check as CI:

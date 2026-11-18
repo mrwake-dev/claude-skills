@@ -32,6 +32,10 @@
     {
       "name": "mwd-agents",
       "source": "./plugins/mwd-agents"
+    },
+    {
+      "name": "mwd-agent-sidebar",
+      "source": "./plugins/mwd-agent-sidebar"
     }
   ]
 }
