@@ -1373,7 +1373,11 @@ export const register: Register = on => {
     const nextUp = p.steps.find(st => st.status === 'pending')
     // The desktop app lists the steps under the message, so the line is the terminal's alone.
     const line = e.surface !== 'terminal' ? '' : now ? `Now: ${now.text}` : done === n ? 'All steps done' : nextUp ? `Next: ${nextUp.text}` : ''
-    const showPane = <Button key="plan-pane" label="◧" plain dimColor onPress={() => undefined} />
+    // The button carries how many subagents run now.
+    const { value: list = [] } = await $.state.get(HELPERS)
+    const running = list.filter(hp => hp.phase === 'working').length
+    const paneLabel = running ? `◧ ${running}` : '◧'
+    const showPane = <Button key="plan-pane" label={paneLabel} plain dimColor onPress={() => undefined} />
     const dismiss = <Button key="plan-dismiss" label="✕" plain dimColor role="dismiss" onPress={() => undefined} />
 
     let row: unknown
@@ -1381,7 +1385,7 @@ export const register: Register = on => {
     if (e.surface !== 'terminal' && 'Svg' in els) {
       const { Svg } = els
       // 8.4 CSS pixels a column, plus the engine's five at the right end; the rest is the two buttons and their gaps.
-      const px = Math.max(180, Math.min(1600, Math.round(((cols || 100) + 5) * 8.4) - 80))
+      const px = Math.max(180, Math.min(1600, Math.round(((cols || 100) + 6 - paneLabel.length) * 8.4) - 80))
       w = cols || BAR_FALLBACK
       row = (
         <Box key="plan-row" flexDirection="row" alignItems="center" gap={1}>
@@ -1395,7 +1399,7 @@ export const register: Register = on => {
       const { value: tick = 0 } = await $.state.get(SHIM)
       w = cols || BAR_FALLBACK
       const titleW = Math.max(6, Math.min(28, p.title.length, Math.floor(w / 3)))
-      const barW = Math.max(6, w - titleW - label.length - pct.length - 12)
+      const barW = Math.max(6, w - titleW - label.length - pct.length - 11 - paneLabel.length)
       const fillC = Math.round((barW * done) / n)
       const liveC = now ? Math.max(0, Math.round((barW * Math.min(n, done + 1)) / n) - fillC) : 0
       const cells = Array.from({ length: fillC }, (_, i) => mix(P_LIGHT, P_DEEP, fillC > 1 ? i / (fillC - 1) : 1))

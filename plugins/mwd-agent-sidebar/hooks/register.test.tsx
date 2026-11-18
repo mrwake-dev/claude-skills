@@ -422,12 +422,15 @@ for (const surface of ['desktop', 'terminal'] as const) {
       expect(live1 !== live2, 'the step in progress shimmers').toBe(true)
     }
 
+    expect((await v.find({ key: 'plan-pane' }))!.props.label, 'no count while none run').toBe('◧')
+
     // The bar follows the plan, not subagents: a running subagent adds nothing to it.
     await $.agent.spawn({ tool_use_id: 's1', prompt: 'x', description: 'Build the slides', subagentType: 'general-purpose' } as never)
     await clock.settle()
     expect(await v.find({ text: /subagent/i }), 'no subagent line').toBeUndefined()
 
     // The ◧ opens the pane.
+    expect((await v.find({ key: 'plan-pane' }))!.props.label, 'one subagent runs').toBe('◧ 1')
     const before = opened.length
     await v.press({ key: 'plan-pane' })
     expect(opened.slice(before), 'pane opened from the bar').toEqual(['subagents'])
