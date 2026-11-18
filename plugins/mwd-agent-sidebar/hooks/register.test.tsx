@@ -488,21 +488,19 @@ for (const surface of ['desktop', 'terminal'] as const) {
     expect(statuses(), 'wrap_up checks off the rest').toEqual(['completed', 'completed', 'completed'])
   })
 
-  test(`a step finishing raises a toast, and a finished plan holds 20 s then hides (${surface})`, { timeoutMs: 30000 }, async ($, on) => {
+  test(`a step finishing raises no toast, and a finished plan holds 20 s then hides (${surface})`, { timeoutMs: 30000 }, async ($, on) => {
     const { clock, toasts } = rig(on, {})
     await $.session.start({ source: 'startup', cwd: '/Users/test/vault', surface, isInteractive: true } as never)
     const callTool = $.tool.call as unknown as (input: unknown) => Promise<unknown>
     const plan = (steps: unknown, n: number) => callTool({ tool: 'mcp__mwd-agent-sidebar__plan', tool_use_id: `p${n}`, title: 'Make the deck', steps })
     await plan(steps4(1, true), 1)
     await clock.settle()
-    expect(toasts, 'no toast for steps already done in a new plan').toHaveLength(0)
     await plan(steps4(2, true), 2)
     await clock.settle()
-    expect(toasts, 'the step that finished').toEqual(['Done: Draft the outline'])
 
     await plan(steps4(4, false), 3)
     await clock.settle()
-    expect(toasts[toasts.length - 1], 'whole plan done').toBe('All 4 steps done.')
+    expect(toasts, 'no toast for a finished step or plan').toHaveLength(0)
     const v = await $.ui.mount({ plugin: 'mwd-agent-sidebar', surface, component: 'AbovePrompt', props: bandProps() })
     expect(await bandSays(v, surface), 'held at 100%').toContain('100%')
     await clock.advance(19_000)

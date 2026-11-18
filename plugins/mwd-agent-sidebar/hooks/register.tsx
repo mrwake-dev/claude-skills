@@ -627,15 +627,7 @@ function syncShimmer($: EngineInterface) {
   }
 }
 
-function say($: EngineInterface, text: string) {
-  try {
-    $.ui.toast(cut(text, 140))
-  } catch {
-    // A toast is only a hint.
-  }
-}
-
-/** Takes a whole new list, keeps done times, toasts what just finished, and saves. */
+/** Takes a whole new list, keeps done times, and saves. */
 async function applyPlan($: EngineInterface, title: string | undefined, incoming: StepIn[]) {
   const now = new Date(await $.clock.now()).toISOString()
   const allDone = incoming.length > 0 && incoming.every(st => st.status === 'completed')
@@ -648,13 +640,11 @@ async function applyPlan($: EngineInterface, title: string | undefined, incoming
     if (i >= 0) used.add(i)
     return i >= 0 ? old[i] : undefined
   }
-  const justDone: string[] = []
   const steps: PlanStep[] = incoming.map(st => {
     const was = match(st)
     const step: PlanStep = { text: st.text, status: st.status, ...(st.id ? { id: st.id } : {}) }
     if (st.status === 'completed') {
       step.doneAt = was?.status === 'completed' && was.doneAt ? was.doneAt : now
-      if (was?.status !== 'completed' && !fresh) justDone.push(st.text)
     }
     return step
   })
@@ -664,7 +654,6 @@ async function applyPlan($: EngineInterface, title: string | undefined, incoming
   if (!steps.length) planShown = false
   else if (allDone && !wasDone) {
     planShown = true
-    say($, steps.length === 1 ? 'All steps done.' : `All ${steps.length} steps done.`)
     holdTimer?.cancel()
     holdTimer = $.clock.after(DONE_HOLD_MS, () => {
       holdTimer = null
@@ -675,7 +664,6 @@ async function applyPlan($: EngineInterface, title: string | undefined, incoming
     planShown = true
     holdTimer?.cancel()
     holdTimer = null
-    if (justDone.length) say($, `Done: ${justDone.join(', ')}`)
   }
   await writePlan($)
   await drawPlan($)
