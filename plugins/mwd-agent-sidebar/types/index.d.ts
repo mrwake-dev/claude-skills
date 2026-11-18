@@ -55,7 +55,7 @@ declare module 'claude-code' {
   interface PluginState {
     'mwd-agent-sidebar': {
       helpers: Helper[]
-      /** Tick count (spinner and pet frames) and the clock time of the last tick, for elapsed times. */
+      /** Tick count (activity line and pet frames) and the clock time of the last tick, for elapsed times. */
       clock: { tick: number; now: number }
       /** Which cards show their full step list, and which groups are folded. */
       view: { open: string[]; folded: string[] }

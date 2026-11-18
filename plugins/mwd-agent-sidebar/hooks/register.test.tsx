@@ -565,12 +565,22 @@ test('the plan tool sits in front, and work without a plan gets one nudge', { ti
 
   const callTool = $.tool.call as unknown as (input: unknown) => Promise<{ result?: unknown; context?: string[] }>
   const first = await callTool({ tool: 'Bash', tool_use_id: 'b1', command: 'ls' })
-  expect((first.context ?? []).join(' '), 'no plan yet: nudge').toContain('mcp__mwd-agent-sidebar__plan')
+  expect(first.context ?? [], 'the first call may come beside the plan: quiet').toHaveLength(0)
   const second = await callTool({ tool: 'Bash', tool_use_id: 'b2', command: 'ls' })
-  expect(second.context ?? [], 'only once a turn').toHaveLength(0)
+  expect((second.context ?? []).join(' '), 'no plan yet: nudge').toContain('mcp__mwd-agent-sidebar__plan')
+  const third = await callTool({ tool: 'Bash', tool_use_id: 'b3', command: 'ls' })
+  expect(third.context ?? [], 'only once a turn').toHaveLength(0)
 
   await callTool({ tool: 'mcp__mwd-agent-sidebar__plan', tool_use_id: 'p1', steps: steps4(0, true) })
   const after = await callTool({ tool: 'Read', tool_use_id: 'r1', file_path: '/x' })
   expect(after.context ?? [], 'plan made: quiet').toHaveLength(0)
   expect(planFile(files), 'plan file written for Chat Inventory').toBeDefined()
+
+  // A batch of reads stays quiet; the reminder to tick the plan comes at the 15th call since it changed.
+  for (let i = 2; i <= 14; i++) {
+    const quiet = await callTool({ tool: 'Read', tool_use_id: `r${i}`, file_path: '/x' })
+    expect(quiet.context ?? [], `call ${i} since the plan: quiet`).toHaveLength(0)
+  }
+  const stale = await callTool({ tool: 'Read', tool_use_id: 'r15', file_path: '/x' })
+  expect((stale.context ?? []).join(' '), 'stale plan: one reminder').toContain('has not changed in a while')
 })

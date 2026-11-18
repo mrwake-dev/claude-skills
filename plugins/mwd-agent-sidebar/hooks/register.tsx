@@ -526,10 +526,10 @@ const PLAN_PROMPT =
   'Call it again with the full list each time a step finishes or a new one starts. Mark the last step completed before your final answer. ' +
   'When you write a plan for the user to approve, save its steps with the tool too, all pending, so the plan shows in the bar and the Chat Inventory to-do list. ' +
   'A step that launches subagents is one step. Skip it only for a one-line answer with no tool calls.'
-// Main-chat tool calls in a turn before the nudge to make a plan.
-const NUDGE_AFTER = 1
-// Tool calls since the last plan update before the nudge to tick it.
-const STALE_AFTER = 8
+// Main-chat tool calls in a turn before the nudge to make a plan; two, so a plan sent beside the first call counts.
+const NUDGE_AFTER = 2
+// Tool calls since the last plan update before the nudge to tick it; a batch of reads alone stays under it.
+const STALE_AFTER = 15
 const NUDGE_NEW =
   'Agent Sidebar: you have no plan for this task yet. Call mcp__mwd-agent-sidebar__plan now with every step in order, so the user sees your progress.'
 const NUDGE_CONT =
