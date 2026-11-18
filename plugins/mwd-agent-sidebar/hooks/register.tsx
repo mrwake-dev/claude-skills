@@ -522,9 +522,10 @@ async function switchPoll($: EngineInterface) {
 // ---------- The plan: one list per chat, shared with chat-inventory through a file ----------
 
 const PLAN_TOOL = 'mcp__mwd-agent-sidebar__plan'
-const MIRRORED = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate'])
+const MIRRORED = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate', 'mcp__ccd_turn__update_plan', 'mcp__ccd_turn__wrap_up'])
 const PLAN_PROMPT =
-  'Your to-do list is the mcp__mwd-agent-sidebar__plan tool (this app has no TodoWrite). The user watches it as a progress bar. ' +
+  'Your to-do list is the mcp__mwd-agent-sidebar__plan tool. The user watches it as a progress bar. ' +
+  'If this app gives you a task list tool of its own (TodoWrite, TaskCreate or update_plan), keep only that one: it feeds the bar, so do not call this tool as well. ' +
   'For any task that needs 2 or more steps or tool calls, call it first, before other tools, with every step in order and the first one in_progress. ' +
   'Call it again with the full list each time a step finishes or a new one starts. Mark the last step completed before your final answer. ' +
   'When you write a plan for the user to approve, save its steps with the tool too, all pending, so the plan shows in the bar and the Chat Inventory to-do list. ' +
@@ -696,12 +697,13 @@ async function planFromTool($: EngineInterface, args: Record<string, unknown>) {
   return `Plan saved: ${doneCount(steps)} of ${steps.length} steps done.`
 }
 
-/** TodoWrite, TaskCreate and TaskUpdate on the main chat feed the same plan. */
+/** TodoWrite, TaskCreate, TaskUpdate and the desktop app's task list on the main chat feed the same plan. */
 async function mirror($: EngineInterface, tool: string, args: Record<string, unknown>, r: unknown) {
   const res = (r as { result?: unknown; isError?: boolean; deny?: string } | undefined) ?? {}
   if (res.deny || res.isError) return
-  if (tool === 'TodoWrite') {
-    const todos = Array.isArray(args.todos) ? (args.todos as unknown[]) : []
+  const list = tool === 'TodoWrite' ? (args.todos ?? []) : tool === 'mcp__ccd_turn__update_plan' ? args.items : undefined
+  if (list !== undefined) {
+    const todos = Array.isArray(list) ? (list as unknown[]) : []
     const steps: StepIn[] = []
     for (const t of todos) {
       const o = (t && typeof t === 'object' ? t : {}) as Record<string, unknown>
@@ -709,6 +711,24 @@ async function mirror($: EngineInterface, tool: string, args: Record<string, unk
       if (text) steps.push({ text, status: isStatus(o.status) ? o.status : 'pending' })
     }
     await applyPlan($, undefined, steps)
+    return
+  }
+  if (tool === 'mcp__ccd_turn__update_plan' || tool === 'mcp__ccd_turn__wrap_up') {
+    if (!plan || planDone) return
+    const all: StepIn[] = plan.steps.map(st => ({ text: st.text, status: st.status }))
+    // wrap_up checks off whatever is left; advance finishes the step in progress and starts the next.
+    if (tool === 'mcp__ccd_turn__wrap_up') for (const st of all) st.status = 'completed'
+    if (args.advance === true) {
+      const live = all.find(st => st.status === 'in_progress')
+      if (live) live.status = 'completed'
+      const nextUp = all.find(st => st.status === 'pending')
+      if (nextUp) nextUp.status = 'in_progress'
+    }
+    for (const k of Array.isArray(args.done) ? (args.done as unknown[]) : []) {
+      if (typeof k === 'number' && all[k - 1]) all[k - 1]!.status = 'completed'
+    }
+    if (typeof args.start === 'number' && all[args.start - 1]) all[args.start - 1]!.status = 'in_progress'
+    await applyPlan($, undefined, all)
     return
   }
   const current: StepIn[] = plan && !planDone ? plan.steps.map(st => ({ text: st.text, status: st.status, ...(st.id ? { id: st.id } : {}) })) : []
@@ -843,15 +863,15 @@ function mix(a: string, b: string, t: number): string {
 const BAND_H = 24
 const TRACK_H = 14
 
-/** The task bar above the prompt, one drawing: dot, title, purple gradient track, ticks, Tasks pill, percent. */
+/** The task bar above the prompt, one drawing: dot, title, purple gradient track, ticks, count and percent. */
 function bandSvg(p: BandPlan, W: number): string {
   const n = p.steps.length
   const done = doneCount(p.steps)
   const ratio = n ? done / n : 0
   const title = fitPx(p.title, 13, Math.max(60, W * 0.35))
-  const percent = `${Math.round(ratio * 100)}%`
+  const percent = `${done}/${n} · ${Math.round(ratio * 100)}%`
   const barX = Math.round(14 + textPx(title, 13) + 12)
-  const barW = Math.max(60, W - barX - 44)
+  const barW = Math.max(60, W - barX - Math.round(textPx(percent, 12.5) + 14))
   const y0 = (BAND_H - TRACK_H) / 2
   const fillW = Math.round(barW * ratio)
   // The step in progress glows softly from the fill to that step's end.
@@ -862,9 +882,6 @@ function bandSvg(p: BandPlan, W: number): string {
     const x = Math.round((barW * i) / n)
     if (x > fillW + 3) ticks.push(`<rect x="${x}" y="${TRACK_H / 2 - 4}" width="1.5" height="8" rx="0.75"/>`)
   }
-  const label = `Tasks ${done}/${n}`
-  const pillW = Math.round(18 + label.length * 6.4)
-  const pillX = Math.max(0, Math.min(barW - pillW, fillW - pillW))
   const finished = n > 0 && done === n
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${BAND_H}" viewBox="0 0 ${W} ${BAND_H}">
 <style>
@@ -892,8 +909,6 @@ ${fillW > 0 ? `<rect width="${fillW}" height="${TRACK_H}" fill="url(#hdb-g)"/>` 
 ${fillW > 0 && !finished ? `<g clip-path="url(#hdb-f)"><rect class="sh" width="70" height="${TRACK_H}" fill="url(#hdb-s)"/></g>` : ''}
 <g class="tk">${ticks.join('')}</g>
 </g>
-<rect x="${pillX}" width="${pillW}" height="${TRACK_H}" rx="${TRACK_H / 2}" fill="${P_DEEP}"/>
-<text x="${pillX + pillW / 2}" y="${TRACK_H / 2 + 4}" text-anchor="middle" font-family="${FONT}" font-size="11" font-weight="600" fill="#ffffff">${xml(label)}</text>
 </g>
 <text class="pc" x="${W - 4}" y="${BAND_H / 2 + 4.5}" text-anchor="end" font-family="${FONT}" font-size="12.5" font-variant-numeric="tabular-nums">${percent}</text>
 </svg>`
@@ -1350,15 +1365,16 @@ export const register: Register = on => {
     const label = `Tasks ${done}/${n}`
     const now = p.steps.find(st => st.status === 'in_progress')
     const nextUp = p.steps.find(st => st.status === 'pending')
-    const line = now ? `Now: ${now.text}` : done === n ? 'All steps done' : nextUp ? `Next: ${nextUp.text}` : ''
+    // The desktop app lists the steps under the message, so the line is the terminal's alone.
+    const line = e.surface !== 'terminal' ? '' : now ? `Now: ${now.text}` : done === n ? 'All steps done' : nextUp ? `Next: ${nextUp.text}` : ''
     const dismiss = <Button key="plan-dismiss" label="✕" plain dimColor role="dismiss" onPress={() => undefined} />
 
     let row: unknown
     let w: number
     if (e.surface !== 'terminal' && 'Svg' in els) {
       const { Svg } = els
-      // About 8 CSS pixels a column; the rest is the dismiss button and its gap.
-      const px = Math.max(180, Math.min(1600, (cols || 100) * 8 - 56))
+      // 8.4 CSS pixels a column, plus the engine's five at the right end; the rest is the dismiss button and its gap.
+      const px = Math.max(180, Math.min(1600, Math.round(((cols || 100) + 5) * 8.4) - 48))
       w = cols || BAR_FALLBACK
       row = (
         <Box key="plan-row" flexDirection="row" alignItems="center" gap={1}>

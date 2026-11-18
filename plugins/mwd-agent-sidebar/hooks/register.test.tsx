@@ -402,13 +402,16 @@ for (const surface of ['desktop', 'terminal'] as const) {
     expect(says, 'plan title').toContain('Make the deck')
     expect(says, 'count').toContain('Tasks 2/4')
     expect(says, 'percent').toContain('50%')
-    expect(await v.find({ type: 'Text', text: /^Now: Build the slides$/ }), 'current step under the bar').toBeDefined()
+    const nowLine = await v.find({ type: 'Text', text: /^Now: Build the slides$/ })
     if (surface === 'desktop') {
+      expect(nowLine, 'no current step line beside the app task list').toBeUndefined()
       const svg = String((await v.find({ type: 'Svg' }))!.props.source)
+      expect(svg, 'count beside the percent, not on the track').toContain('>2/4 · 50%<')
       expect(svg, 'purple gradient').toContain('#6d28d9')
       expect(svg, 'sparkles twinkle').toContain('@keyframes tw')
       expect(svg, 'the step in progress glows').toContain('class="lv"')
     } else {
+      expect(nowLine, 'current step under the bar').toBeDefined()
       const cells = await v.findAll({ text: /^█$/ })
       expect(cells, 'half the bar is filled').toHaveLength(23)
       expect(cells[0]!.props.color, 'light purple at the start').toBe('#c4b5fd')
@@ -453,7 +456,28 @@ for (const surface of ['desktop', 'terminal'] as const) {
     expect(saved.steps.map(st => st.text), 'todos mirrored').toEqual(['Pull the numbers', 'Write the summary', 'Send the link'])
     const v = await $.ui.mount({ plugin: 'mwd-agent-sidebar', surface, component: 'AbovePrompt', props: bandProps() })
     expect(await bandSays(v, surface), 'band from TodoWrite').toContain('Tasks 1/3')
-    expect(await v.find({ type: 'Text', text: /^Now: Write the summary$/ }), 'current todo').toBeDefined()
+    if (surface === 'terminal') expect(await v.find({ type: 'Text', text: /^Now: Write the summary$/ }), 'current todo').toBeDefined()
+  })
+
+  test(`the desktop app's task list is mirrored into the plan (${surface})`, { timeoutMs: 30000 }, async ($, on) => {
+    const files: Record<string, string> = {}
+    const { clock } = rig(on, files)
+    await $.session.start({ source: 'startup', cwd: '/Users/test/vault', surface, isInteractive: true } as never)
+    const callTool = $.tool.call as unknown as (input: unknown) => Promise<unknown>
+    const statuses = () => (JSON.parse(files[planFile(files)!]!) as { steps: { status: string }[] }).steps.map(st => st.status)
+    const items = ['Read the code', 'Fix the bar', 'Run the tests'].map((content, i) => ({ content, status: i ? 'pending' : 'in_progress' }))
+    await callTool({ tool: 'mcp__ccd_turn__update_plan', tool_use_id: 'u1', items, scope: 'first_task' })
+    await clock.settle()
+    expect(statuses(), 'items mirrored').toEqual(['in_progress', 'pending', 'pending'])
+    await callTool({ tool: 'mcp__ccd_turn__update_plan', tool_use_id: 'u2', advance: true })
+    await clock.settle()
+    expect(statuses(), 'advance moves one step on').toEqual(['completed', 'in_progress', 'pending'])
+    await callTool({ tool: 'mcp__ccd_turn__update_plan', tool_use_id: 'u3', done: [2], start: 3 })
+    await clock.settle()
+    expect(statuses(), 'done and start by number').toEqual(['completed', 'completed', 'in_progress'])
+    await callTool({ tool: 'mcp__ccd_turn__wrap_up', tool_use_id: 'u4', recap: 'Done.' })
+    await clock.settle()
+    expect(statuses(), 'wrap_up checks off the rest').toEqual(['completed', 'completed', 'completed'])
   })
 
   test(`a step finishing raises a toast, and a finished plan holds 20 s then hides (${surface})`, { timeoutMs: 30000 }, async ($, on) => {
