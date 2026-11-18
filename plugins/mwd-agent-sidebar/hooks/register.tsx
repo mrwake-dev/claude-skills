@@ -31,15 +31,11 @@ const FRAME_TICKS = 2
 const ACCENT = '#d97757'
 const GOOD = '#16a34a'
 const BAD = '#dc2626'
-const WARN = '#eab308'
-const INK = '#1c1917'
 // The task bar is a purple gradient, light at the start and deep at the head (after Johnny's Savvy Progress).
 const P_LIGHT = '#c4b5fd'
 const P_MID = '#8b5cf6'
 const P_DEEP = '#6d28d9'
 // Quarter circles read clearly on desktop fonts and in the terminal.
-const SPIN = ['◐', '◓', '◑', '◒']
-const PULSE = ['●∙∙', '∙●∙', '∙∙●', '∙●∙']
 
 const KIND_COLOR: Record<StepKind, string> = {
   Command: '#ca8a04',
@@ -902,37 +898,29 @@ ${fillW > 0 && !finished ? `<g clip-path="url(#hdb-f)"><rect class="sh" width="7
 </svg>`
 }
 
-const CARD_BAR_H = 10
+const CARD_LINE_H = 3
+// Ticks the bright piece takes to cross a card's line.
+const SWEEP_TICKS = 8
 
 /**
- * One thick sparkle bar per subagent card. While it works a bright piece sweeps the track
- * (its length is not known); once over the whole bar fills and glows slowly. The drawing
- * depends only on the phase, so CSS moves it and redraws do not restart it.
+ * The thin activity line of a running card. The pane redraws on every tick and a redraw
+ * restarts CSS motion, so each drawing glides one tick's worth from where the last one ended.
  */
-function cardBarSvg(phase: HelperPhase, color: string, W: number, seat: number): string {
-  const id = `hdc${seat}`
-  const H = CARD_BAR_H
-  const fill = phase === 'failed' ? BAD : color
-  const piece = Math.max(30, Math.round(W * 0.35))
-  const working = phase === 'working'
-  const body = working
-    ? `<g class="mv"><rect width="${piece}" height="${H}" fill="url(#${id}-p)"/><g fill="#ffffff">${sparkles(piece, H, 1.6, 0.1, 0.35, seat * 11)}</g></g>`
-    : `<rect width="${W}" height="${H}" fill="url(#${id}-g)"/><g fill="#ffffff">${sparkles(W, H, 1.6, 0.18, 0.3, seat * 11)}</g>`
+function cardLineSvg(color: string, W: number, tick: number, seat: number): string {
+  const H = CARD_LINE_H
+  const piece = Math.max(24, Math.round(W * 0.3))
+  const at = (k: number) => Math.round(-piece + ((W + piece) * k) / SWEEP_TICKS)
+  const k = (tick + seat * 3) % SWEEP_TICKS
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
 <style>
-${twinkleCss(!working)}
-.mv{animation:mv${seat} 1.8s ease-in-out infinite;animation-delay:-${(seat * 0.37) % 1.8}s}
-@keyframes mv${seat}{from{transform:translateX(-${piece}px)}to{transform:translateX(${W}px)}}
-@media (prefers-reduced-motion: reduce){.s0,.s1,.s2,.s3,.mv{animation:none}}
+.mv{animation:mv ${TICK_MS}ms linear forwards}
+@keyframes mv{from{transform:translateX(${at(k)}px)}to{transform:translateX(${at(k + 1)}px)}}
+@media (prefers-reduced-motion: reduce){.mv{animation:none;transform:translateX(${at(k + 1)}px)}}
 </style>
-<defs>
-<linearGradient id="${id}-g" x1="0" x2="1"><stop offset="0" stop-color="${fill}" stop-opacity=".55"/><stop offset="1" stop-color="${fill}"/></linearGradient>
-<linearGradient id="${id}-p" x1="0" x2="1"><stop offset="0" stop-color="${fill}" stop-opacity="0"/><stop offset=".7" stop-color="${fill}"/><stop offset="1" stop-color="${fill}" stop-opacity=".9"/></linearGradient>
-<clipPath id="${id}-c"><rect width="${W}" height="${H}" rx="${H / 2}"/></clipPath>
-</defs>
-<g clip-path="url(#${id}-c)">
-<rect width="${W}" height="${H}" fill="${fill}" opacity=".16"/>
-${body}
+<defs><clipPath id="hdl${seat}"><rect width="${W}" height="${H}" rx="${H / 2}"/></clipPath></defs>
+<g clip-path="url(#hdl${seat})">
+<rect width="${W}" height="${H}" fill="${color}" opacity=".18"/>
+<rect class="mv" width="${piece}" height="${H}" rx="${H / 2}" fill="${color}"/>
 </g>
 </svg>`
 }
@@ -1173,85 +1161,73 @@ export const register: Register = on => {
       const hue = hueOf(hp.hue)
       const live = hp.phase === 'working'
       const isOpen = view.open.includes(hp.id)
-      const mark = live ? '●' : hp.phase === 'done' ? '✓' : '✗'
-      const markColor = hp.phase === 'failed' ? BAD : GOOD
       const time = clockTime((live ? Math.max(clk.now, hp.startedAt) : hp.endedAt) - hp.startedAt)
-      const meta = [hp.hasUsage ? `${tokenText(hp.tokens + hp.turnTokens)} tokens` : '', time].filter(Boolean).join(' · ')
-      const who = [hp.type, hp.model, hp.effort].filter(Boolean).join(' · ')
+      // One dim line: the type (unless it is the plain one), model, effort, tokens, time and, once over, the step count.
+      const meta = [
+        hp.type === 'general-purpose' ? '' : hp.type,
+        hp.model,
+        hp.effort,
+        hp.hasUsage ? `${tokenText(hp.tokens + hp.turnTokens)} tokens` : '',
+        time,
+        live ? '' : `${hp.count} step${hp.count === 1 ? '' : 's'}`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
       const current = hp.steps[hp.steps.length - 1]
-      const spin = SPIN[clk.tick % SPIN.length]!
-      const pulse = PULSE[clk.tick % PULSE.length]!
-      const lead = live
-        ? `Step ${hp.count} · ${current?.live ?? 'Getting started'}`
-        : hp.phase === 'done'
-          ? `Done · ${hp.count} step${hp.count === 1 ? '' : 's'}`
-          : `Stopped before it finished · ${hp.count} step${hp.count === 1 ? '' : 's'}`
-      // Room for the spinner and pulse on a live line.
-      const leadW = Math.max(6, cw - (live ? 2 + pulse.length + 1 : 0))
-      const history = (live ? hp.steps.slice(0, -1) : hp.steps).slice(-HISTORY)
+      const lead = live ? `Step ${hp.count} · ${current?.live ?? 'Getting started'}` : hp.phase === 'failed' ? 'Stopped before it finished' : ''
+      // The steps before the live one, a run of the same step shown once with its count.
+      const runs: { text: string; n: number }[] = []
+      for (const st of live ? hp.steps.slice(0, -1) : []) {
+        const last = runs[runs.length - 1]
+        if (last && last.text === st.live) last.n++
+        else runs.push({ text: st.live, n: 1 })
+      }
+      const history = runs.slice(-HISTORY)
       const [b1, b2, b3] = barParts(hp.phase, cw, clk.tick, hp.seat)
-      const barColor = hp.phase === 'failed' ? BAD : hue.color
       const rowW = cw - TAG_W
-      // About 6.5 CSS pixels a column, as the pet's 48 pixels fill its 8.
-      const barPx = Math.max(60, Math.floor(cw * 6.5))
+      // About 8.6 CSS pixels a column, a little under the measured 8.9.
+      const barPx = Math.max(60, Math.floor(cw * 8.6))
 
       return (
-        <Box
-          key={`card-${hp.id}`}
-          flexDirection="row"
-          width={width}
-          marginBottom={1}
-          borderStyle="round"
-          borderColor={live ? hue.color : undefined}
-          borderDimColor={!live}
-          paddingX={1}
-          paddingY={1}
-          gap={0}
-        >
+        <Box key={`card-${hp.id}`} flexDirection="row" width={width} marginBottom={1} borderStyle="round" borderDimColor paddingX={1} paddingY={1} gap={0}>
           {pet(hp)}
           <Box flexDirection="column" width={cw}>
             <Box flexDirection="row" justifyContent="space-between" width={cw}>
-              <Box width={cw - 2}>
+              <Box width={live ? cw : cw - 2}>
                 <Text bold wrap="truncate-end">
-                  {cut(hp.description, cw - 2)}
+                  {cut(hp.description, live ? cw : cw - 2)}
                 </Text>
               </Box>
-              <Text bold color={markColor}>{mark}</Text>
+              {live ? null : (
+                <Text bold color={hp.phase === 'failed' ? BAD : GOOD}>
+                  {hp.phase === 'done' ? '✓' : '✗'}
+                </Text>
+              )}
             </Box>
-            <Box flexDirection="row" justifyContent="space-between" width={cw}>
-              <Text dimColor wrap="truncate-end">
-                {cut(who, Math.max(4, cw - meta.length - 1))}
-              </Text>
-              <Text dimColor>{meta}</Text>
-            </Box>
-            <Box flexDirection="row" width={cw} marginTop={1}>
-              {live ? <Text bold color={ACCENT}>{`${spin} `}</Text> : null}
-              <Box width={leadW}>
-                <Text bold={live} color={live ? ACCENT : hp.phase === 'done' ? GOOD : BAD} wrap="truncate-end">
-                  {cut(lead, leadW)}
+            <Text dimColor wrap="truncate-end">
+              {cut(meta, cw)}
+            </Text>
+            {lead ? (
+              <Box key={`lead-${hp.id}`} width={cw} marginTop={1}>
+                <Text color={live ? undefined : BAD} wrap="truncate-end">
+                  {cut(lead, cw)}
                 </Text>
               </Box>
-              {live ? <Text color={ACCENT}>{` ${pulse}`}</Text> : null}
-            </Box>
+            ) : null}
             {!isOpen &&
-              history.map((st, i) => (
+              history.map((run, i) => (
                 <Text key={`h-${hp.id}-${i}`} dimColor wrap="truncate-end">
-                  {cut(`  ${st.live}`, cw)}
+                  {cut(run.n > 1 ? `${run.text} ×${run.n}` : run.text, cw)}
                 </Text>
               ))}
-            {Svg ? (
+            {!live ? null : Svg ? (
               <Box key={`bar-${hp.id}`} width={cw} marginTop={1}>
-                <Svg
-                  source={cardBarSvg(hp.phase, hue.color, barPx, hp.seat)}
-                  alt={live ? 'Working' : hp.phase === 'done' ? 'Done' : 'Stopped'}
-                  width={barPx}
-                  height={CARD_BAR_H}
-                />
+                <Svg source={cardLineSvg(hue.color, barPx, clk.tick, hp.seat)} alt="Working" width={barPx} height={CARD_LINE_H} />
               </Box>
             ) : (
               <Text key={`bar-${hp.id}`} wrap="truncate-end">
                 <Text dimColor>{b1}</Text>
-                <Text color={barColor}>{b2}</Text>
+                <Text color={hue.color}>{b2}</Text>
                 <Text dimColor>{b3}</Text>
               </Text>
             )}
@@ -1286,24 +1262,18 @@ export const register: Register = on => {
       )
     }
 
-    // A heading per group: a filled bar the full width, its title and count in bold, and an
-    // arrow that folds the group.
-    const group = (id: string, title: string, members: Helper[], fill: string, ink: string) => {
+    // A heading per group: an arrow that folds it, a small mark in the group's colour, its title and count.
+    const group = (id: string, title: string, members: Helper[], mark: string, color: string) => {
       if (!members.length) return null
       const folded = view.folded.includes(id)
-      const label = `${title} · ${members.length}`
-      const room = Math.max(label.length, width - 6)
       return (
         <Box key={`grp-${id}`} flexDirection="column" width={width} marginTop={1}>
-          <Box key={`head-${id}`} flexDirection="row" width={width} backgroundColor={fill} paddingX={1} marginBottom={1}>
-            <Button key={`group-${id}`} plain onPress={() => undefined}>
-              <Text bold color={ink} backgroundColor={fill}>
-                {folded ? '▸ ' : '▾ '}
-              </Text>
+          <Box key={`head-${id}`} flexDirection="row" width={width} marginBottom={1}>
+            <Button key={`group-${id}`} plain dimColor onPress={() => undefined}>
+              {folded ? '▸ ' : '▾ '}
             </Button>
-            <Text bold color={ink} backgroundColor={fill} wrap="truncate-end">
-              {label.padEnd(room)}
-            </Text>
+            <Text color={color}>{`${mark} `}</Text>
+            <Text dimColor wrap="truncate-end">{`${title} · ${members.length}`}</Text>
           </Box>
           {folded ? null : members.map(card)}
         </Box>
@@ -1333,9 +1303,9 @@ export const register: Register = on => {
           </Box>
         ) : null}
         {list.length ? null : <Text dimColor>Cards show up here when Claude starts a subagent.</Text>}
-        {group('running', 'Running', running, GOOD, '#ffffff')}
-        {group('finished', 'Finished', finished, WARN, INK)}
-        {group('stopped', 'Stopped', stopped, BAD, '#ffffff')}
+        {group('running', 'Running', running, '●', GOOD)}
+        {group('finished', 'Finished', finished, '✓', GOOD)}
+        {group('stopped', 'Stopped', stopped, '✗', BAD)}
       </Box>
     )
   })
@@ -1372,8 +1342,8 @@ export const register: Register = on => {
     let w: number
     if (e.surface !== 'terminal' && 'Svg' in els) {
       const { Svg } = els
-      // 8.4 CSS pixels a column, plus the engine's five at the right end; the rest is the two buttons and their gaps.
-      const px = Math.max(180, Math.min(1600, Math.round(((cols || 100) + 6 - paneLabel.length) * 8.4) - 80))
+      // About 8.9 CSS pixels a column; the rest is the two buttons and their gaps.
+      const px = Math.max(180, Math.min(1600, Math.round(((cols || 100) + 1 - paneLabel.length) * 8.9) - 84))
       w = cols || BAR_FALLBACK
       row = (
         <Box key="plan-row" flexDirection="row" alignItems="center" gap={1}>

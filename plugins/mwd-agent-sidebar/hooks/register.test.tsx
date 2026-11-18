@@ -126,7 +126,10 @@ for (const surface of ['desktop', 'terminal'] as const) {
     expect(await v.find({ text: /Gmail: search threads/ }), 'Gmail connector in words').toBeDefined()
     expect(await v.find({ type: 'Text', text: /^Running · 2\s*$/ }), 'Running heading with its count').toBeDefined()
     const runHead = await v.find({ key: 'head-running' })
-    expect(runHead?.props.backgroundColor, 'Running sits in a green box').toBe('#16a34a')
+    expect(runHead?.props.backgroundColor, 'a quiet heading, no filled box').toBeUndefined()
+    expect(await v.find({ type: 'Text', text: /^● $/ }), 'a small mark before the heading').toBeDefined()
+    expect(await v.find({ text: /general-purpose/ }), 'the plain agent type is left out').toBeUndefined()
+    expect(await v.find({ text: /[◐◓◑◒∙]/ }), 'no spinner or pulse').toBeUndefined()
     expect(await v.find({ text: /Explore · Haiku/ }), 'type and model').toBeDefined()
     expect(await v.find({ text: /^Time$/ }), 'time tile').toBeDefined()
     expect(await v.find({ type: 'Text', text: /^Total chat cost$/ }), 'Total chat cost label').toBeDefined()
@@ -138,7 +141,9 @@ for (const surface of ['desktop', 'terminal'] as const) {
     await $.turn.complete({ answer: 'Found it.', agentId: 'agent-a1', reason: 'answer', durationMs: 4000, isAborted: false, turnId: 't1', usage } as never)
     await clock.settle()
     expect(await v.find({ type: 'Text', text: /^Finished · 1\s*$/ }), 'Finished heading with its count').toBeDefined()
-    expect((await v.find({ key: 'head-finished' }))?.props.backgroundColor, 'Finished sits in a yellow box').toBe('#eab308')
+    expect((await v.find({ key: 'head-finished' }))?.props.backgroundColor, 'a quiet heading, no filled box').toBeUndefined()
+    expect(await v.find({ text: /34k tokens · .* · 1 step$/ }), 'a finished card keeps its step count on the dim line').toBeDefined()
+    expect(await v.find({ text: /Step 1 · Reading research\.md/ }), 'no live line once finished').toBeUndefined()
     expect(await v.find({ text: /^Subagent tokens$/ }), 'subagent tokens tile from usage').toBeDefined()
     expect(await v.find({ text: /34k tokens/ }), 'card tokens').toBeDefined()
     expect(statuses[statuses.length - 1], 'still no footer status').toBeUndefined()
@@ -333,21 +338,34 @@ for (const surface of ['desktop', 'terminal'] as const) {
     expect('*/.claude/mods/.open-mwd-agent-sidebar-sess1' in files, 'request file removed').toBe(false)
   })
 
-  test(`each card has one thick sparkle bar (${surface})`, { timeoutMs: 30000 }, async ($, on) => {
+  test(`a running card has one activity line that moves with the clock (${surface})`, { timeoutMs: 30000 }, async ($, on) => {
     const { clock } = rig(on, {})
     await $.session.start({ source: 'startup', cwd: '/Users/test/vault', surface, isInteractive: true } as never)
+    const callTool = $.tool.call as unknown as (input: unknown) => Promise<unknown>
     await $.agent.spawn({ tool_use_id: 's1', prompt: 'x', description: 'Build the landing page', subagentType: 'general-purpose' } as never)
     await clock.settle()
     const v = await $.ui.mount({ plugin: 'mwd-agent-sidebar', surface, component: 'Pane', requestId: 'subagents', props: props() })
     expect(await v.find({ text: /[─━]/ }), 'no thin two-line bar').toBeUndefined()
     if (surface === 'desktop') {
-      const bars = (await v.findAll({ type: 'Svg' })).filter(b => b.props.alt === 'Working')
-      expect(bars, 'one bar for the card').toHaveLength(1)
-      expect(bars[0]!.props.height, 'thick').toBe(10)
-      expect(bars[0]!.props.source, 'sparkles twinkle').toContain('@keyframes tw')
+      const lines = async () => (await v.findAll({ type: 'Svg' })).filter(b => b.props.alt === 'Working')
+      const first = await lines()
+      expect(first, 'one line for the card').toHaveLength(1)
+      expect(first[0]!.props.height, 'thin').toBe(3)
+      // A redraw restarts CSS motion, so the place comes from the tick: each drawing starts where the last ended.
+      const ends = (src: string) => /from\{transform:translateX\((-?\d+)px\)\}to\{transform:translateX\((-?\d+)px\)\}/.exec(src)!.slice(1)
+      const a = ends(String(first[0]!.props.source))
+      await clock.advance(300)
+      const b = ends(String((await lines())[0]!.props.source))
+      expect(b[0], 'the next drawing starts where this one ends').toBe(a[1])
     } else {
       expect(await v.find({ text: /^[█░]{20,}$/ }), 'one bar of thick blocks').toBeDefined()
     }
+
+    // The same step twice in a row is one line with its count.
+    for (const n of [1, 2]) await callTool({ tool: 'WebFetch', tool_use_id: `w${n}`, url: 'https://docs.example.com/page', prompt: 'read', agentId: 'agent-a1' })
+    await callTool({ tool: 'Read', tool_use_id: 'r1', file_path: '/Users/test/vault/notes.md', agentId: 'agent-a1' })
+    await clock.advance(1_000)
+    expect(await v.find({ text: /^Opening docs\.example\.com ×2$/ }), 'repeats collapse').toBeDefined()
   })
 
   test(`Hide in the pane writes the shared flag and closes it (${surface})`, { timeoutMs: 30000 }, async ($, on) => {
