@@ -1017,6 +1017,12 @@ export const register: Register = on => {
     return { element: e.element }
   })
 
+  // ◧ on the task bar opens the pane.
+  on('ui.press', { plugin: NAME, element: 'plan-pane' }, async ($, e) => {
+    await openPane($).catch(err => log($, `open from the bar: ${String(err)}`))
+    return { element: e.element }
+  })
+
   // ✕ on the task bar hides it until the plan changes again.
   on('ui.press', { plugin: NAME, element: 'plan-dismiss' }, async ($, e) => {
     planShown = false
@@ -1367,18 +1373,20 @@ export const register: Register = on => {
     const nextUp = p.steps.find(st => st.status === 'pending')
     // The desktop app lists the steps under the message, so the line is the terminal's alone.
     const line = e.surface !== 'terminal' ? '' : now ? `Now: ${now.text}` : done === n ? 'All steps done' : nextUp ? `Next: ${nextUp.text}` : ''
+    const showPane = <Button key="plan-pane" label="◧" plain dimColor onPress={() => undefined} />
     const dismiss = <Button key="plan-dismiss" label="✕" plain dimColor role="dismiss" onPress={() => undefined} />
 
     let row: unknown
     let w: number
     if (e.surface !== 'terminal' && 'Svg' in els) {
       const { Svg } = els
-      // 8.4 CSS pixels a column, plus the engine's five at the right end; the rest is the dismiss button and its gap.
-      const px = Math.max(180, Math.min(1600, Math.round(((cols || 100) + 5) * 8.4) - 48))
+      // 8.4 CSS pixels a column, plus the engine's five at the right end; the rest is the two buttons and their gaps.
+      const px = Math.max(180, Math.min(1600, Math.round(((cols || 100) + 5) * 8.4) - 80))
       w = cols || BAR_FALLBACK
       row = (
         <Box key="plan-row" flexDirection="row" alignItems="center" gap={1}>
           <Svg key="plan-svg" source={bandSvg(p, px)} alt={`${p.title}: ${label}, ${pct}`} width={px} height={BAND_H} />
+          {showPane}
           {dismiss}
         </Box>
       )
@@ -1387,7 +1395,7 @@ export const register: Register = on => {
       const { value: tick = 0 } = await $.state.get(SHIM)
       w = cols || BAR_FALLBACK
       const titleW = Math.max(6, Math.min(28, p.title.length, Math.floor(w / 3)))
-      const barW = Math.max(6, w - titleW - label.length - pct.length - 10)
+      const barW = Math.max(6, w - titleW - label.length - pct.length - 12)
       const fillC = Math.round((barW * done) / n)
       const liveC = now ? Math.max(0, Math.round((barW * Math.min(n, done + 1)) / n) - fillC) : 0
       const cells = Array.from({ length: fillC }, (_, i) => mix(P_LIGHT, P_DEEP, fillC > 1 ? i / (fillC - 1) : 1))
@@ -1410,6 +1418,7 @@ export const register: Register = on => {
           </Text>
           <Text bold color={P_MID}>{label}</Text>
           <Text dimColor>{pct}</Text>
+          {showPane}
           {dismiss}
         </Box>
       )

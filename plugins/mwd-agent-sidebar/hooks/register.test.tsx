@@ -382,7 +382,7 @@ for (const surface of ['desktop', 'terminal'] as const) {
 
   test(`the plan tool writes the plan file and draws "2 of 4" (${surface})`, { timeoutMs: 30000 }, async ($, on) => {
     const files: Record<string, string> = {}
-    const { clock, ran } = rig(on, files)
+    const { clock, ran, opened } = rig(on, files)
     await $.session.start({ source: 'startup', cwd: '/Users/test/vault', surface, isInteractive: true } as never)
     const callTool = $.tool.call as unknown as (input: unknown) => Promise<{ result?: unknown }>
     const said = await callTool({ tool: 'mcp__mwd-agent-sidebar__plan', tool_use_id: 'p1', title: 'Make the deck', steps: steps4(2, true) })
@@ -413,9 +413,9 @@ for (const surface of ['desktop', 'terminal'] as const) {
     } else {
       expect(nowLine, 'current step under the bar').toBeDefined()
       const cells = await v.findAll({ text: /^█$/ })
-      expect(cells, 'half the bar is filled').toHaveLength(23)
+      expect(cells, 'half the bar is filled').toHaveLength(22)
       expect(cells[0]!.props.color, 'light purple at the start').toBe('#c4b5fd')
-      expect(cells[22]!.props.color, 'deep purple at the head').toBe('#6d28d9')
+      expect(cells[21]!.props.color, 'deep purple at the head').toBe('#6d28d9')
       const live1 = String((await v.find({ text: /^▓+$/ }))!.props.color)
       await clock.advance(360)
       const live2 = String((await v.find({ text: /^▓+$/ }))!.props.color)
@@ -426,6 +426,11 @@ for (const surface of ['desktop', 'terminal'] as const) {
     await $.agent.spawn({ tool_use_id: 's1', prompt: 'x', description: 'Build the slides', subagentType: 'general-purpose' } as never)
     await clock.settle()
     expect(await v.find({ text: /subagent/i }), 'no subagent line').toBeUndefined()
+
+    // The ◧ opens the pane.
+    const before = opened.length
+    await v.press({ key: 'plan-pane' })
+    expect(opened.slice(before), 'pane opened from the bar').toEqual(['subagents'])
 
     // The ✕ hides the bar; the next plan update brings it back.
     await v.press({ key: 'plan-dismiss' })
