@@ -858,7 +858,7 @@ function bandSvg(p: BandPlan, W: number): string {
   const barW = Math.max(60, W - barX - Math.round(textPx(percent, 12.5) + 14))
   const y0 = (BAND_H - TRACK_H) / 2
   const fillW = Math.round(barW * ratio)
-  // The step in progress glows softly from the fill to that step's end.
+  // The step in progress is a steady soft tint from the fill to that step's end.
   const live = p.steps.some(st => st.status === 'in_progress')
   const liveW = live ? Math.round((barW * Math.min(n, done + 1)) / n) - fillW : 0
   const ticks: string[] = []
@@ -872,9 +872,9 @@ function bandSvg(p: BandPlan, W: number): string {
 .tt{fill:#1f1f1f}.pc{fill:#6b6b6b}.k{fill:#ece9fb}.tk{fill:#c9c2f0}
 @media (prefers-color-scheme: dark){.tt{fill:#ececec}.pc{fill:#a3a3a3}.k{fill:#2a2640}.tk{fill:#4c4470}}
 ${twinkleCss(finished)}
-.lv{animation:gl 1.6s ease-in-out infinite}@keyframes gl{0%,100%{opacity:.18}50%{opacity:.5}}
+.lv{opacity:.3}
 .sh{animation:sw 2.6s linear infinite}@keyframes sw{from{transform:translateX(-70px)}to{transform:translateX(${fillW + 70}px)}}
-@media (prefers-reduced-motion: reduce){.s0,.s1,.s2,.s3,.lv,.sh{animation:none}}
+@media (prefers-reduced-motion: reduce){.s0,.s1,.s2,.s3,.sh{animation:none}}
 </style>
 <defs>
 <linearGradient id="hdb-g" x1="0" x2="1"><stop offset="0" stop-color="${P_LIGHT}"/><stop offset=".55" stop-color="${P_MID}"/><stop offset="1" stop-color="${P_DEEP}"/></linearGradient>
@@ -1189,7 +1189,7 @@ export const register: Register = on => {
       const barPx = Math.max(60, Math.floor(cw * 8.6))
 
       return (
-        <Box key={`card-${hp.id}`} flexDirection="row" width={width} marginBottom={1} borderStyle="round" borderDimColor paddingX={1} paddingY={1} gap={0}>
+        <Box key={`card-${hp.id}`} flexDirection="row" width={width} marginBottom={1} borderStyle="round" paddingX={1} paddingY={1} gap={0}>
           {pet(hp)}
           <Box flexDirection="column" width={cw}>
             <Box flexDirection="row" justifyContent="space-between" width={cw}>

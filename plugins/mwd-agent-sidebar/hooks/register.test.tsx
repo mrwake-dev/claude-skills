@@ -427,7 +427,8 @@ for (const surface of ['desktop', 'terminal'] as const) {
       expect(svg, 'count beside the percent, not on the track').toContain('>2/4 · 50%<')
       expect(svg, 'purple gradient').toContain('#6d28d9')
       expect(svg, 'sparkles twinkle').toContain('@keyframes tw')
-      expect(svg, 'the step in progress glows').toContain('class="lv"')
+      expect(svg, 'the step in progress is tinted').toContain('class="lv"')
+      expect(svg, 'and does not blink').not.toContain('@keyframes gl')
     } else {
       expect(nowLine, 'current step under the bar').toBeDefined()
       const cells = await v.findAll({ text: /^█$/ })
