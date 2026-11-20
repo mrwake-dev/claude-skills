@@ -142,7 +142,8 @@ for (const surface of ['desktop', 'terminal'] as const) {
     await clock.settle()
     expect(await v.find({ type: 'Text', text: /^Finished · 1\s*$/ }), 'Finished heading with its count').toBeDefined()
     expect((await v.find({ key: 'head-finished' }))?.props.backgroundColor, 'a quiet heading, no filled box').toBeUndefined()
-    expect(await v.find({ text: /34k tokens · .* · 1 step$/ }), 'a finished card keeps its step count on the dim line').toBeDefined()
+    expect(await v.find({ text: /^34k tokens · .* · 1 step$/ }), 'tokens, time and steps on a line of their own').toBeDefined()
+    expect(await v.find({ type: 'Text', text: /^Explore · Haiku[^·]*$/ }), 'type and model on the line above').toBeDefined()
     expect(await v.find({ text: /Step 1 · Reading research\.md/ }), 'no live line once finished').toBeUndefined()
     expect(await v.find({ text: /^Subagent tokens$/ }), 'subagent tokens tile from usage').toBeDefined()
     expect(await v.find({ text: /34k tokens/ }), 'card tokens').toBeDefined()
@@ -480,9 +481,10 @@ for (const surface of ['desktop', 'terminal'] as const) {
     await clock.settle()
     const saved = JSON.parse(files[planFile(files)!]!) as { steps: { text: string; status: string }[] }
     expect(saved.steps.map(st => st.text), 'todos mirrored').toEqual(['Pull the numbers', 'Write the summary', 'Send the link'])
-    const v = await $.ui.mount({ plugin: 'mwd-agent-sidebar', surface, component: 'AbovePrompt', props: bandProps() })
+    const v = await $.ui.mount({ plugin: 'mwd-agent-sidebar', surface, component: 'AbovePrompt', props: bandProps(80) })
     expect(await bandSays(v, surface), 'band from TodoWrite').toContain('Tasks 1/3')
-    if (surface === 'terminal') expect(await v.find({ type: 'Text', text: /^Now: Write the summary$/ }), 'current todo').toBeDefined()
+    expect(await bandSays(v, surface), 'an unnamed plan is titled by its step in progress').toContain('Write the summary')
+    expect(await v.find({ type: 'Text', text: /^Now: / }), 'so no line repeats it under the bar').toBeUndefined()
   })
 
   test(`the desktop app's task list is mirrored into the plan (${surface})`, { timeoutMs: 30000 }, async ($, on) => {

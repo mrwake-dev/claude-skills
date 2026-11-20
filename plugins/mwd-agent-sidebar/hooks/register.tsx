@@ -1126,11 +1126,9 @@ export const register: Register = on => {
       const live = hp.phase === 'working'
       const isOpen = view.open.includes(hp.id)
       const time = clockTime((live ? Math.max(clk.now, hp.startedAt) : hp.endedAt) - hp.startedAt)
-      // One dim line: the type (unless it is the plain one), model, effort, tokens, time and, once over, the step count.
+      // Two dim lines: who it is (the plain type left out), then its tokens, time and, once over, the step count.
+      const who = [hp.type === 'general-purpose' ? '' : hp.type, hp.model, hp.effort].filter(Boolean).join(' · ')
       const meta = [
-        hp.type === 'general-purpose' ? '' : hp.type,
-        hp.model,
-        hp.effort,
         hp.hasUsage ? `${tokenText(hp.tokens + hp.turnTokens)} tokens` : '',
         time,
         live ? '' : `${hp.count} step${hp.count === 1 ? '' : 's'}`,
@@ -1168,6 +1166,11 @@ export const register: Register = on => {
                 </Text>
               )}
             </Box>
+            {who ? (
+              <Text dimColor wrap="truncate-end">
+                {cut(who, cw)}
+              </Text>
+            ) : null}
             <Text dimColor wrap="truncate-end">
               {cut(meta, cw)}
             </Text>
@@ -1294,7 +1297,10 @@ export const register: Register = on => {
     const now = p.steps.find(st => st.status === 'in_progress')
     const nextUp = p.steps.find(st => st.status === 'pending')
     // The desktop app lists the steps under the message, so the line is the terminal's alone.
-    const line = e.surface !== 'terminal' ? '' : now ? `Now: ${now.text}` : done === n ? 'All steps done' : nextUp ? `Next: ${nextUp.text}` : ''
+    // A plan nobody named is titled by its step in progress, and then needs no line under the bar.
+    const named = p.title !== 'Plan'
+    const title = named ? p.title : (now?.text ?? (done === n ? 'All steps done' : (nextUp?.text ?? p.title)))
+    const line = e.surface !== 'terminal' || !named ? '' : now ? `Now: ${now.text}` : done === n ? 'All steps done' : nextUp ? `Next: ${nextUp.text}` : ''
     // The button carries how many subagents run now.
     const { value: list = [] } = await $.state.get(HELPERS)
     const running = list.filter(hp => hp.phase === 'working').length
@@ -1311,7 +1317,7 @@ export const register: Register = on => {
       w = cols || BAR_FALLBACK
       row = (
         <Box key="plan-row" flexDirection="row" alignItems="center" gap={1}>
-          <Svg key="plan-svg" source={bandSvg(p, px)} alt={`${p.title}: ${label}, ${pct}`} width={px} height={BAND_H} />
+          <Svg key="plan-svg" source={bandSvg({ ...p, title }, px)} alt={`${title}: ${label}, ${pct}`} width={px} height={BAND_H} />
           {showPane}
           {dismiss}
         </Box>
@@ -1319,7 +1325,7 @@ export const register: Register = on => {
     } else {
       // The terminal: dot, title, a gradient of blocks, the step in progress in a lighter block, count, percent.
       w = cols || BAR_FALLBACK
-      const titleW = Math.max(6, Math.min(28, p.title.length, Math.floor(w / 3)))
+      const titleW = Math.max(6, Math.min(28, title.length, Math.floor(w / 3)))
       const barW = Math.max(6, w - titleW - label.length - pct.length - 11 - paneLabel.length)
       const fillC = Math.round((barW * done) / n)
       const liveC = now ? Math.max(0, Math.round((barW * Math.min(n, done + 1)) / n) - fillC) : 0
@@ -1329,7 +1335,7 @@ export const register: Register = on => {
           <Text color={P_DEEP}>●</Text>
           <Box width={titleW} flexShrink={0}>
             <Text bold wrap="truncate-end">
-              {cut(p.title, titleW)}
+              {cut(title, titleW)}
             </Text>
           </Box>
           <Text key="plan-bar">
