@@ -347,6 +347,50 @@ for (const surface of ['desktop', 'terminal'] as const) {
     expect('*/.claude/mods/.open-mwd-agent-sidebar-sess1' in files, 'request file removed').toBe(false)
   })
 
+  if (surface === 'desktop') {
+    test('each crab wears its type\'s outfit and its state\'s accessory', { timeoutMs: 30000 }, async ($, on) => {
+      const { clock } = rig(on, {})
+      await $.session.start({ source: 'startup', cwd: '/Users/test/vault', surface, isInteractive: true } as never)
+      const callTool = $.tool.call as unknown as (input: unknown) => Promise<unknown>
+      await $.agent.spawn({ tool_use_id: 's1', prompt: 'x', description: 'Map the code', subagentType: 'Explore' } as never)
+      await $.agent.spawn({ tool_use_id: 's2', prompt: 'x', description: 'Do the job', subagentType: 'general-purpose' } as never)
+      await $.agent.spawn({ tool_use_id: 's3', prompt: 'x', description: 'Something new', subagentType: 'brand-new-agent' } as never)
+      await clock.settle()
+      const v = await $.ui.mount({ plugin: 'mwd-agent-sidebar', surface, component: 'Pane', requestId: 'subagents', props: props() })
+      const pets = async () => (await v.findAll({ type: 'Svg' })).filter(p => String(p.props.alt).startsWith('Claude crab')).map(p => String(p.props.source))
+      const [explore, plain, unknown] = await pets()
+      expect(explore, 'the canvas has 3 rows for a hat').toContain('viewBox="0 0 18 16"')
+      expect(explore, 'Explore wears the explorer hat').toContain('#c8a165')
+      expect(plain, 'general-purpose wears the hard hat').toContain('#facc15')
+      expect(unknown, 'an unknown type wears nothing').not.toContain('#facc15')
+      expect(unknown, 'nor any other hat').not.toContain('#c8a165')
+
+      // Three minutes without a step: asleep, still, hat off. The next step wakes it.
+      await clock.advance(181_000)
+      const asleep = (await pets())[0]!
+      expect(asleep, 'a sleeping Z').toContain('#cbd5e1')
+      expect(asleep, 'the hat gives its slot to the Z').not.toContain('#c8a165')
+      await clock.advance(600)
+      expect((await pets())[0], 'a sleeping crab stands still').toBe(asleep)
+      await callTool({ tool: 'Read', tool_use_id: 'c1', file_path: '/x', agentId: 'agent-a1' })
+      await clock.advance(300)
+      expect((await pets())[0], 'awake on the next step').toContain('#c8a165')
+
+      // Stop: a white flag in the right claw, kept once it has ended.
+      await v.press({ key: 'stop-agent-a2' })
+      const stopping = (await pets())[1]!
+      expect(stopping, 'the flag pole while stopping').toContain('#9ca3af')
+      expect(stopping, 'the hard hat stays on: the flag is in a claw').toContain('#facc15')
+      // Finished: a party hat. An API error: smoke.
+      await $.turn.complete({ answer: 'ok', agentId: 'agent-a1', reason: 'answer', durationMs: 1, isAborted: false, turnId: 't1' } as never)
+      await $.turn.complete({ answer: '', agentId: 'agent-a3', reason: 'error', durationMs: 1, isAborted: false, turnId: 't3' } as never)
+      await clock.settle()
+      const all = (await pets()).join('\n')
+      expect(all, 'a party hat on the finished one').toContain('#f472b6')
+      expect(all, 'smoke over the one an error ended').toContain('fill="#6b7280"')
+    })
+  }
+
   test(`Stop on a running card refuses its next tool calls and files it under Stopped (${surface})`, { timeoutMs: 30000 }, async ($, on) => {
     const { clock } = rig(on, {})
     await $.session.start({ source: 'startup', cwd: '/Users/test/vault', surface, isInteractive: true } as never)

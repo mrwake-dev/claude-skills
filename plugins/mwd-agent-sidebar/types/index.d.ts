@@ -26,6 +26,8 @@ export type Helper = {
   /** Clock time it started and, once over, when it ended. */
   startedAt: number
   endedAt: number
+  /** Clock time of its last tool call or model request; a running one idle for 3 minutes sleeps. */
+  lastAt: number
   /** How many tool calls it made in all. */
   count: number
   /** Its last 200 steps, oldest first; the last one is the live step. */

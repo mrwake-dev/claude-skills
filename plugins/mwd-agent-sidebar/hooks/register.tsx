@@ -23,7 +23,9 @@ const TAG_W = 11
 // Columns the pet takes beside a card; the Svg is 48 by 36 CSS pixels.
 const PET_W = 8
 const PET_PX_W = 48
-const PET_PX_H = 36
+// Rows above the crab for a hat, and the pet's height with them.
+const PET_TOP = 3
+const PET_PX_H = 43
 // A running pet changes frame every second tick: about every 600 ms.
 const FRAME_TICKS = 2
 
@@ -95,33 +97,133 @@ function crab(frame: number): { body: Px[]; eyes: Px[] } {
   return { body: body.map(move), eyes: eyes.map(move) }
 }
 
+// ---------- Wearables: an outfit per agent type, an accessory per state ----------
+
+type Dot = [x: number, y: number, color: string]
+/** Where a wearable sits. A state takes its slot from the outfit; claw items rise with the claws. */
+type Wear = { slot: 'head' | 'face' | 'left' | 'right'; px: Dot[]; closed?: boolean; still?: boolean }
+
+const dots = (y: number, from: number, to: number, c: string): Dot[] => span(y, from, to).map(([x]) => [x, y, c])
+const W_TAN = '#c8a165'
+const W_HAT = '#facc15'
+const W_HAT2 = '#ca8a04'
+const W_WHITE = '#f5f5f4'
+const W_GREY = '#9ca3af'
+const W_PALE = '#d1d5db'
+const W_GOLD = '#fbbf24'
+const W_STRAW = '#fde047'
+const W_PINK = '#f472b6'
+const W_BLUE = '#3b82f6'
+const W_STEEL = '#94a3b8'
+const W_LEAF = '#4ade80'
+const W_WOOD = '#a16207'
+const lens = (cx: number): Dot[] =>
+  ([[cx - 1, 2], [cx, 2], [cx + 1, 2], [cx - 1, 3], [cx - 1, 4], [cx + 1, 3], [cx + 1, 4], [cx - 1, 5], [cx, 5], [cx + 1, 5]] as Px[]).map(([x, y]) => [x, y, W_WHITE])
+
+const OUTFITS: Record<string, Wear> = {
+  explorer: { slot: 'head', px: [...dots(0, 2, 13, W_TAN), ...dots(-1, 4, 11, '#7a4f2a'), ...dots(-2, 5, 10, W_TAN)] },
+  magnifier: { slot: 'right', px: [[14, 0, W_PALE], [15, 0, W_PALE], [13, 1, W_PALE], [13, 2, W_PALE], [16, 1, W_PALE], [16, 2, W_PALE], [14, 3, W_PALE], [15, 3, W_PALE], [14, 1, '#93c5fd'], [15, 1, '#93c5fd'], [14, 2, '#93c5fd'], [15, 2, '#93c5fd']] },
+  beret: { slot: 'head', px: [...dots(0, 4, 11, W_BLUE), ...dots(-1, 5, 12, W_BLUE), [8, -2, W_BLUE]] },
+  monocle: { slot: 'face', px: [[10, 2, W_GOLD], [9, 3, W_GOLD], [9, 4, W_GOLD], [11, 3, W_GOLD], [11, 4, W_GOLD], [10, 5, W_GOLD], [12, 6, W_GOLD], [12, 7, W_GOLD]] },
+  clipboard: { slot: 'left', px: [...[0, 1, 2, 3].flatMap(y => dots(y, 0, 2, W_WHITE)), [1, -1, W_GREY], [0, 2, '#16a34a'], [1, 3, '#16a34a'], [2, 1, '#16a34a']] },
+  tube: { slot: 'left', px: [[1, 0, W_WHITE], [1, 1, W_WHITE], [1, 2, W_LEAF], [1, 3, W_LEAF], [0, -1, W_LEAF]] },
+  broom: { slot: 'right', px: [[14, 1, W_WOOD], [14, 2, W_WOOD], [14, 3, W_WOOD], ...dots(0, 13, 15, W_STRAW), ...dots(-1, 13, 15, W_STRAW)] },
+  glasses: { slot: 'face', px: [...lens(5), ...lens(10), [7, 3, W_WHITE], [8, 3, W_WHITE]] },
+  shield: { slot: 'left', px: [...dots(0, 0, 2, W_STEEL), ...dots(1, 0, 2, W_STEEL), ...dots(2, 0, 2, W_STEEL), [1, 3, W_STEEL], [1, 1, W_BLUE], [1, 2, W_BLUE]] },
+  book: { slot: 'left', px: [...[0, 1, 2, 3].flatMap((y): Dot[] => [[0, y, '#b45309'], [1, y, '#b45309'], [2, y, W_WHITE]]), [0, 1, W_GOLD], [1, 1, W_GOLD]] },
+  screen: { slot: 'right', px: [...dots(0, 13, 16, W_PALE), [13, 1, W_PALE], [14, 1, '#22d3ee'], [15, 1, '#22d3ee'], [16, 1, W_PALE], ...dots(2, 13, 16, W_PALE), [14, 3, W_GREY], [15, 3, W_GREY]] },
+  quill: { slot: 'right', px: [[14, 3, W_GOLD], [14, 2, W_WHITE], [15, 1, W_WHITE], [15, 0, W_WHITE], [16, -1, W_WHITE], [14, 1, '#cbd5e1'], [16, 0, '#cbd5e1']] },
+  wrench: { slot: 'right', px: [[14, 1, W_GREY], [14, 2, W_GREY], [14, 3, W_GREY], [13, 0, W_GREY], [14, 0, W_GREY], [15, 0, W_GREY], [13, -1, W_GREY], [15, -1, W_GREY]] },
+  gradcap: { slot: 'head', px: [...dots(0, 5, 10, '#4b5563'), ...dots(-1, 2, 13, '#6b7280'), [13, 0, W_GOLD], [13, 1, W_GOLD]] },
+  antenna: { slot: 'head', px: [[8, 0, W_GREY], [8, -1, W_GREY], [8, -2, '#22d3ee'], [6, -2, '#67e8f9'], [10, -2, '#67e8f9']] },
+  hardhat: { slot: 'head', px: [...dots(0, 2, 13, W_HAT), ...dots(-1, 4, 11, W_HAT), ...dots(-2, 6, 9, W_HAT), [7, -1, W_HAT2], [8, -1, W_HAT2], [7, -2, W_HAT2], [8, -2, W_HAT2]] },
+}
+
+// A type with no entry wears nothing, so a new agent never breaks the pane.
+const OUTFIT_OF: Record<string, string> = {
+  Explore: 'explorer',
+  'mwd-agents:code-explorer': 'magnifier',
+  Plan: 'beret',
+  'mwd-agents:planner': 'beret',
+  'mwd-agents:plan-critic': 'monocle',
+  'mwd-agents:diff-verifier': 'clipboard',
+  'mwd-agents:test-gap': 'tube',
+  'mwd-agents:code-simplifier': 'broom',
+  'mwd-agents:refactor-cleaner': 'broom',
+  'mwd-review:correctness': 'glasses',
+  'mwd-review:security': 'shield',
+  'mwd-review:docs': 'book',
+  'mwd-review:device': 'screen',
+  'mwd-review:language': 'quill',
+  'mwd-review:platform-scripts': 'wrench',
+  'claude-code-guide': 'gradcap',
+  'web-fetch': 'antenna',
+  'general-purpose': 'hardhat',
+  claude: 'hardhat',
+  fork: 'hardhat',
+}
+
+const STATES: Record<string, Wear> = {
+  party: { slot: 'head', px: [...dots(0, 6, 9, W_PINK), [7, -1, W_STRAW], [8, -1, W_STRAW], [7, -2, W_PINK], [8, -2, W_PINK], [7, -3, W_WHITE], [8, -3, W_WHITE]] },
+  bandage: { slot: 'head', closed: true, px: [...dots(1, 3, 12, W_WHITE), [8, 1, '#ef4444'], [13, 0, W_WHITE], [13, 1, W_WHITE]] },
+  pause: { slot: 'head', closed: true, px: [-3, -2, -1].flatMap((y): Dot[] => [[6, y, W_GOLD], [7, y, W_GOLD], [9, y, W_GOLD], [10, y, W_GOLD]]) },
+  smoke: { slot: 'head', closed: true, px: [[7, -3, W_PALE], [8, -3, W_PALE], ...dots(-2, 6, 9, W_PALE), ...dots(-1, 6, 9, W_GREY), [10, -2, W_GREY], [8, 0, '#6b7280']] },
+  sleep: { slot: 'head', closed: true, still: true, px: [...dots(-4, 11, 13, '#cbd5e1'), [13, -3, '#cbd5e1'], [12, -2, '#cbd5e1'], [11, -1, '#cbd5e1'], ...dots(0, 11, 13, '#cbd5e1')] },
+  flag: { slot: 'right', px: [[14, 0, W_GREY], [14, 1, W_GREY], [14, 2, W_GREY], [14, 3, W_GREY], [15, 0, W_WHITE], [16, 0, W_WHITE], [15, 1, W_WHITE], [16, 1, W_WHITE]] },
+}
+
+// A running crab with no step for this long falls asleep.
+const SLEEP_MS = 180_000
+
+/** The state accessory a helper wears now; empty for a busy running one. */
+function stateOf(hp: Helper, now: number): string {
+  if (hp.phase === 'done') return 'party'
+  if (hp.phase === 'failed') return hp.why === 'stopped' ? 'flag' : hp.why === 'aborted' ? 'pause' : hp.why === 'error' ? 'smoke' : 'bandage'
+  if (hp.stopping) return 'flag'
+  return now - (hp.lastAt ?? hp.startedAt) >= SLEEP_MS ? 'sleep' : ''
+}
+
 const petCache = new Map<string, string>()
 
-function petSvg(hue: number, frame: number) {
-  const key = `${hue % HUES.length}:${frame}`
+function petSvg(hue: number, frame: number, outfitId = '', stateId = '') {
+  const outfit = OUTFITS[outfitId]
+  const state = STATES[stateId]
+  if (state?.still) frame = 0
+  const key = `${hue % HUES.length}:${frame}:${outfitId}:${stateId}`
   const hit = petCache.get(key)
   if (hit) return hit
-  const { body, eyes } = crab(frame)
+  const { body, eyes } = crab(state?.closed ? 2 : frame)
+  const shape = state?.closed ? crab(frame).body : body
   const fill = hueOf(hue).color
-  const has = new Set(body.map(([x, y]) => `${x},${y}`))
+  const has = new Set(shape.map(([x, y]) => `${x},${y}`))
   // A one-pixel outline round the body, so every colour reads on light and dark.
   const ring = new Set<string>()
-  for (const [x, y] of body) {
+  for (const [x, y] of shape) {
     for (const [ax, ay] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]] as Px[]) {
       const k = `${ax},${ay}`
       if (!has.has(k)) ring.add(k)
     }
   }
-  const rect = (x: number, y: number, c: string) => `<rect x="${x + 1}" y="${y + 1}" width="1" height="1" fill="${c}"/>`
+  // Three spare rows above the head hold a hat.
+  const rect = (x: number, y: number, c: string) => `<rect x="${x + 1}" y="${y + 1 + PET_TOP}" width="1" height="1" fill="${c}"/>`
+  const dy = frame === 1 ? 0 : 1
+  const worn = [outfit && state && outfit.slot === state.slot ? undefined : outfit, state].flatMap(w => {
+    if (!w) return []
+    const lift = frame === 3 && (w.slot === 'left' || w.slot === 'right') ? -2 : 0
+    return w.px.map(([x, y, c]) => rect(x, y + dy + lift, c))
+  })
+  // Closed eyes come from the blink frame, moved to this frame's height.
+  const eyeDy = state?.closed ? dy - 1 : 0
   const parts = [
     ...[...ring].map(k => {
       const [x, y] = k.split(',').map(Number)
       return rect(x!, y!, OUTLINE)
     }),
-    ...body.map(([x, y]) => rect(x, y, fill)),
-    ...eyes.map(([x, y]) => rect(x, y, EYE)),
+    ...shape.map(([x, y]) => rect(x, y, fill)),
+    ...eyes.map(([x, y]) => rect(x, y + eyeDy, EYE)),
+    ...worn,
   ]
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 13" width="${PET_PX_W}" height="${PET_PX_H}" shape-rendering="crispEdges">${parts.join('')}</svg>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 ${13 + PET_TOP}" width="${PET_PX_W}" height="${PET_PX_H}" shape-rendering="crispEdges">${parts.join('')}</svg>`
   petCache.set(key, svg)
   return svg
 }
@@ -378,6 +480,7 @@ async function addHelper($: EngineInterface, id: string, description: string, ty
     effort: '',
     phase: 'working',
     startedAt: now,
+    lastAt: now,
     endedAt: 0,
     count: 0,
     steps: [],
@@ -413,6 +516,7 @@ async function noteTool($: EngineInterface, id: string, step: Step) {
   const hp = helpers.find(x => x.id === id)
   if (!hp) return
   hp.count += 1
+  hp.lastAt = await $.clock.now()
   hp.steps = [...hp.steps, step].slice(-MAX_STEPS)
   // A teammate that finished a turn and picks up work again is working again.
   if (hp.phase !== 'working') {
@@ -426,6 +530,7 @@ async function noteStep($: EngineInterface, id: string, model: string, effort: s
   if (!helpers.some(x => x.id === id)) await adopt($, id)
   const hp = helpers.find(x => x.id === id)
   if (!hp) return
+  hp.lastAt = await $.clock.now()
   if (model) hp.model = shortModel(model)
   if (effort) hp.effort = effort
   if (usage) {
@@ -947,7 +1052,7 @@ export const register: Register = on => {
       const { value } = await $.state.get(HELPERS)
       if (value?.length) {
         // A copy from before body colours has no hue: its seat picks one.
-        helpers = value.map(hp => ({ ...copy(hp), hue: typeof hp.hue === 'number' ? hp.hue : hp.seat % HUES.length, report: hp.report ?? '' }))
+        helpers = value.map(hp => ({ ...copy(hp), hue: typeof hp.hue === 'number' ? hp.hue : hp.seat % HUES.length, report: hp.report ?? '', lastAt: hp.lastAt ?? hp.startedAt }))
         seats = Math.max(...helpers.map(hp => hp.seat)) + 1
         nextHue = (Math.max(...helpers.map(hp => hp.hue)) + 1) % HUES.length
         syncTimers($)
@@ -1139,7 +1244,7 @@ export const register: Register = on => {
       if (Svg) {
         return (
           <Box key={`pet-${hp.id}`} width={PET_W} flexShrink={0}>
-            <Svg source={petSvg(hp.hue, frame)} alt={`Claude crab, ${hue.name}`} width={PET_PX_W} height={PET_PX_H} />
+            <Svg source={petSvg(hp.hue, frame, OUTFIT_OF[hp.type], stateOf(hp, clk.now))} alt={`Claude crab, ${hue.name}`} width={PET_PX_W} height={PET_PX_H} />
           </Box>
         )
       }
