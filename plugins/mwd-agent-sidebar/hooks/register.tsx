@@ -382,6 +382,7 @@ async function addHelper($: EngineInterface, id: string, description: string, ty
     tokens: 0,
     turnTokens: 0,
     hasUsage: false,
+    stopping: false,
     report: '',
     seat: seats,
     hue: pickHue(),
@@ -528,6 +529,7 @@ const PLAN_PROMPT =
 const NUDGE_AFTER = 2
 // Tool calls since the last plan update before the nudge to tick it; a batch of reads alone stays under it.
 const STALE_AFTER = 15
+const STOP_NOTE = 'The user pressed Stop on this subagent in the Agent Sidebar. Call no more tools: end now with a short report of what you have so far.'
 const NUDGE_NEW =
   'Agent Sidebar: you have no plan for this task yet. Call mcp__mwd-agent-sidebar__plan now with every step in order, so the user sees your progress.'
 const NUDGE_CONT =
@@ -976,6 +978,15 @@ export const register: Register = on => {
 
   on('ui.press', { plugin: NAME }, async ($, e, next) => {
     if (off) return next(e)
+    // Stop on a running card: the mod API cannot end a subagent, so its next tool calls are refused and it winds down.
+    if (e.element.startsWith('stop-')) {
+      const hp = helpers.find(x => x.id === e.element.slice('stop-'.length))
+      if (hp && hp.phase === 'working') {
+        hp.stopping = true
+        await publish($)
+      }
+      return { element: e.element }
+    }
     if (e.element.startsWith('report-')) {
       await toggleIn($, 'open', e.element)
       return { element: e.element }
@@ -1024,6 +1035,7 @@ export const register: Register = on => {
     }
     if (off) return next(e)
     if (id) {
+      if (helpers.some(hp => hp.id === id && hp.stopping && hp.phase === 'working')) return { deny: STOP_NOTE } as never
       void noteTool($, id, describe(tool, args)).catch(err => log($, `tool: ${String(err)}`))
       return next(e)
     }
@@ -1070,7 +1082,7 @@ export const register: Register = on => {
     const r = await next(e)
     const id = e.agentId
     if (id && !off && helpers.some(hp => hp.id === id)) {
-      const failed = e.reason === 'error' || e.reason === 'refusal' || e.isAborted
+      const failed = e.reason === 'error' || e.reason === 'refusal' || e.isAborted || helpers.some(hp => hp.id === id && hp.stopping)
       void finish($, id, failed ? 'failed' : 'done', e.usage ?? null, e.answer ?? '').catch(err => log($, `turn: ${String(err)}`))
     }
     return r
@@ -1142,7 +1154,7 @@ export const register: Register = on => {
         .filter(Boolean)
         .join(' · ')
       const current = hp.steps[hp.steps.length - 1]
-      const lead = live ? `Step ${hp.count} · ${current?.live ?? 'Getting started'}` : hp.phase === 'failed' ? 'Stopped before it finished' : ''
+      const lead = live && hp.stopping ? 'Stopping after its current step' : live ? `Step ${hp.count} · ${current?.live ?? 'Getting started'}` : hp.phase === 'failed' ? 'Stopped before it finished' : ''
       // The steps before the live one, a run of the same step shown once with its count.
       const runs: { text: string; n: number }[] = []
       for (const st of live ? hp.steps.slice(0, -1) : []) {
@@ -1165,11 +1177,12 @@ export const register: Register = on => {
           {pet(hp)}
           <Box flexDirection="column" width={cw}>
             <Box flexDirection="row" justifyContent="space-between" width={cw}>
-              <Box width={live ? cw : cw - 2}>
+              <Box width={live && !hp.stopping ? cw - 7 : live ? cw : cw - 2}>
                 <Text bold wrap="truncate-end">
-                  {cut(hp.description, live ? cw : cw - 2)}
+                  {cut(hp.description, live && !hp.stopping ? cw - 7 : live ? cw : cw - 2)}
                 </Text>
               </Box>
+              {live && !hp.stopping ? <Button key={`stop-${hp.id}`} label="Stop" dimColor onPress={() => undefined} /> : null}
               {live ? null : (
                 <Text bold color={hp.phase === 'failed' ? BAD : GOOD}>
                   {hp.phase === 'done' ? '✓' : '✗'}

@@ -35,6 +35,8 @@ export type Helper = {
   turnTokens: number
   /** True once the engine reported any usage for it. */
   hasUsage: boolean
+  /** True once the person pressed Stop: its next tool calls are refused until it ends. */
+  stopping: boolean
   /** The report it handed back, cut to 4000 characters; empty while it runs or when it gave none. */
   report: string
   /** Position in the sidebar, in start order. */

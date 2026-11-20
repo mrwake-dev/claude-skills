@@ -347,6 +347,31 @@ for (const surface of ['desktop', 'terminal'] as const) {
     expect('*/.claude/mods/.open-mwd-agent-sidebar-sess1' in files, 'request file removed').toBe(false)
   })
 
+  test(`Stop on a running card refuses its next tool calls and files it under Stopped (${surface})`, { timeoutMs: 30000 }, async ($, on) => {
+    const { clock } = rig(on, {})
+    await $.session.start({ source: 'startup', cwd: '/Users/test/vault', surface, isInteractive: true } as never)
+    const callTool = $.tool.call as unknown as (input: unknown) => Promise<{ result?: unknown; deny?: string }>
+    await $.agent.spawn({ tool_use_id: 's1', prompt: 'x', description: 'Build the landing page', subagentType: 'general-purpose' } as never)
+    await $.agent.spawn({ tool_use_id: 's2', prompt: 'x', description: 'Design the graphics', subagentType: 'general-purpose' } as never)
+    await clock.settle()
+    const v = await $.ui.mount({ plugin: 'mwd-agent-sidebar', surface, component: 'Pane', requestId: 'subagents', props: props() })
+    const before = await callTool({ tool: 'Read', tool_use_id: 'c1', file_path: '/x', agentId: 'agent-a1' })
+    expect(before.deny, 'runs freely before Stop').toBeUndefined()
+
+    await v.press({ key: 'stop-agent-a1' })
+    expect(await v.find({ key: 'stop-agent-a1' }), 'the button goes once pressed').toBeUndefined()
+    expect(await v.find({ text: /^Stopping after its current step$/ }), 'the card says it is stopping').toBeDefined()
+    const after = await callTool({ tool: 'Read', tool_use_id: 'c2', file_path: '/x', agentId: 'agent-a1' })
+    expect(String(after.deny), 'its next tool call is refused').toContain('pressed Stop')
+    const other = await callTool({ tool: 'Read', tool_use_id: 'c3', file_path: '/x', agentId: 'agent-a2' })
+    expect(other.deny, 'the other subagent carries on').toBeUndefined()
+
+    await $.turn.complete({ answer: 'Half done.', agentId: 'agent-a1', reason: 'answer', durationMs: 1, isAborted: false, turnId: 't1' } as never)
+    await clock.settle()
+    expect(await v.find({ type: 'Text', text: /^Stopped · 1\s*$/ }), 'filed under Stopped').toBeDefined()
+    expect(await v.find({ type: 'Text', text: /^Half done\.$/ }), 'with what it had so far').toBeDefined()
+  })
+
   test(`a running card has one activity line that moves with the clock (${surface})`, { timeoutMs: 30000 }, async ($, on) => {
     const { clock } = rig(on, {})
     await $.session.start({ source: 'startup', cwd: '/Users/test/vault', surface, isInteractive: true } as never)
