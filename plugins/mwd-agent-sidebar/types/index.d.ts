@@ -35,6 +35,8 @@ export type Helper = {
   turnTokens: number
   /** True once the engine reported any usage for it. */
   hasUsage: boolean
+  /** The report it handed back, cut to 4000 characters; empty while it runs or when it gave none. */
+  report: string
   /** Position in the sidebar, in start order. */
   seat: number
   /** Which of the 8 body colours its pet wears; running helpers never share one while there are 8 or fewer. */

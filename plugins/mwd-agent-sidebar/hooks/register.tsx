@@ -382,6 +382,7 @@ async function addHelper($: EngineInterface, id: string, description: string, ty
     tokens: 0,
     turnTokens: 0,
     hasUsage: false,
+    report: '',
     seat: seats,
     hue: pickHue(),
   })
@@ -430,9 +431,10 @@ async function noteStep($: EngineInterface, id: string, model: string, effort: s
   await publish($)
 }
 
-async function finish($: EngineInterface, id: string, phase: HelperPhase, usage: Usage | null) {
+async function finish($: EngineInterface, id: string, phase: HelperPhase, usage: Usage | null, report: string) {
   const hp = helpers.find(x => x.id === id)
   if (!hp) return
+  hp.report = cut(report.trim(), 4000)
   // The turn's own sum wins over the steps counted so far.
   hp.tokens += usage ? usageTotal(usage) : hp.turnTokens
   hp.turnTokens = 0
@@ -931,7 +933,7 @@ export const register: Register = on => {
       const { value } = await $.state.get(HELPERS)
       if (value?.length) {
         // A copy from before body colours has no hue: its seat picks one.
-        helpers = value.map(hp => ({ ...copy(hp), hue: typeof hp.hue === 'number' ? hp.hue : hp.seat % HUES.length }))
+        helpers = value.map(hp => ({ ...copy(hp), hue: typeof hp.hue === 'number' ? hp.hue : hp.seat % HUES.length, report: hp.report ?? '' }))
         seats = Math.max(...helpers.map(hp => hp.seat)) + 1
         nextHue = (Math.max(...helpers.map(hp => hp.hue)) + 1) % HUES.length
         syncTimers($)
@@ -974,6 +976,10 @@ export const register: Register = on => {
 
   on('ui.press', { plugin: NAME }, async ($, e, next) => {
     if (off) return next(e)
+    if (e.element.startsWith('report-')) {
+      await toggleIn($, 'open', e.element)
+      return { element: e.element }
+    }
     if (e.element.startsWith('steps-')) {
       await toggleIn($, 'open', e.element.slice('steps-'.length))
       return { element: e.element }
@@ -1065,7 +1071,7 @@ export const register: Register = on => {
     const id = e.agentId
     if (id && !off && helpers.some(hp => hp.id === id)) {
       const failed = e.reason === 'error' || e.reason === 'refusal' || e.isAborted
-      void finish($, id, failed ? 'failed' : 'done', e.usage ?? null).catch(err => log($, `turn: ${String(err)}`))
+      void finish($, id, failed ? 'failed' : 'done', e.usage ?? null, e.answer ?? '').catch(err => log($, `turn: ${String(err)}`))
     }
     return r
   })
@@ -1145,6 +1151,10 @@ export const register: Register = on => {
         else runs.push({ text: st.live, n: 1 })
       }
       const history = runs.slice(-HISTORY)
+      // A finished card shows the first line of its report; the toggle under it shows it whole.
+      const report = live ? '' : (hp.report ?? '')
+      const reportOpen = view.open.includes(`report-${hp.id}`)
+      const reportLead = oneLine(report.split('\n').find(ln => ln.trim()) ?? '').replace(/^#+\s*/, '').replace(/\*\*/g, '')
       const [b1, b2, b3] = barParts(hp.phase, cw, clk.tick, hp.seat)
       const rowW = cw - TAG_W
       // About 8.6 CSS pixels a column, a little under the measured 8.9.
@@ -1198,6 +1208,25 @@ export const register: Register = on => {
                 <Text dimColor>{b3}</Text>
               </Text>
             )}
+            {report && !reportOpen ? (
+              <Box key={`result-${hp.id}`} width={cw} marginTop={1}>
+                <Text wrap="truncate-end">{cut(reportLead, cw)}</Text>
+              </Box>
+            ) : null}
+            {report && reportOpen ? (
+              <Box key={`result-${hp.id}`} flexDirection="column" width={cw} marginTop={1}>
+                {report.split('\n').map((ln, i) => (
+                  <Text key={`r-${hp.id}-${i}`} wrap="wrap">
+                    {ln || ' '}
+                  </Text>
+                ))}
+              </Box>
+            ) : null}
+            {report ? (
+              <Button key={`report-${hp.id}`} plain dimColor onPress={() => undefined}>
+                {reportOpen ? '▾ Hide report' : '▸ Full report'}
+              </Button>
+            ) : null}
             {hp.steps.length ? (
               <Button key={`steps-${hp.id}`} plain dimColor onPress={() => undefined}>
                 {isOpen ? '▾ Hide steps' : `▸ All ${hp.count} step${hp.count === 1 ? '' : 's'}`}
