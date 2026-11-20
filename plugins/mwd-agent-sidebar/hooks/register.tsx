@@ -318,7 +318,9 @@ async function poll($: EngineInterface) {
     const next: HelperPhase | null =
       a.status === 'completed' || a.status === 'idle' ? 'done' : a.status === 'failed' || a.status === 'killed' ? 'failed' : null
     if (next) {
-      hp.phase = next
+      // A card whose Stop was pressed ends as stopped, whatever the list calls it.
+      hp.phase = hp.stopping ? 'failed' : next
+      hp.why = hp.stopping ? 'stopped' : next === 'failed' ? a.status : ''
       hp.endedAt = now
       changed = true
     }
@@ -383,6 +385,7 @@ async function addHelper($: EngineInterface, id: string, description: string, ty
     turnTokens: 0,
     hasUsage: false,
     stopping: false,
+    why: '',
     report: '',
     seat: seats,
     hue: pickHue(),
@@ -432,9 +435,10 @@ async function noteStep($: EngineInterface, id: string, model: string, effort: s
   await publish($)
 }
 
-async function finish($: EngineInterface, id: string, phase: HelperPhase, usage: Usage | null, report: string) {
+async function finish($: EngineInterface, id: string, phase: HelperPhase, usage: Usage | null, report: string, why: string) {
   const hp = helpers.find(x => x.id === id)
   if (!hp) return
+  hp.why = why
   hp.report = cut(report.trim(), 4000)
   // The turn's own sum wins over the steps counted so far.
   hp.tokens += usage ? usageTotal(usage) : hp.turnTokens
@@ -529,6 +533,14 @@ const PLAN_PROMPT =
 const NUDGE_AFTER = 2
 // Tool calls since the last plan update before the nudge to tick it; a batch of reads alone stays under it.
 const STALE_AFTER = 15
+// What a failed card says, by the reason it ended.
+const WHY: Record<string, string> = {
+  stopped: 'Stopped by you',
+  aborted: 'Interrupted before it finished',
+  refusal: 'The model refused to continue',
+  error: 'Ended by an API error',
+  killed: 'Cancelled before it finished',
+}
 const STOP_NOTE = 'The user pressed Stop on this subagent in the Agent Sidebar. Call no more tools: end now with a short report of what you have so far.'
 const NUDGE_NEW =
   'Agent Sidebar: you have no plan for this task yet. Call mcp__mwd-agent-sidebar__plan now with every step in order, so the user sees your progress.'
@@ -1082,8 +1094,8 @@ export const register: Register = on => {
     const r = await next(e)
     const id = e.agentId
     if (id && !off && helpers.some(hp => hp.id === id)) {
-      const failed = e.reason === 'error' || e.reason === 'refusal' || e.isAborted || helpers.some(hp => hp.id === id && hp.stopping)
-      void finish($, id, failed ? 'failed' : 'done', e.usage ?? null, e.answer ?? '').catch(err => log($, `turn: ${String(err)}`))
+      const why = helpers.some(hp => hp.id === id && hp.stopping) ? 'stopped' : e.isAborted ? 'aborted' : e.reason === 'answer' ? '' : e.reason
+      void finish($, id, why ? 'failed' : 'done', e.usage ?? null, e.answer ?? '', why).catch(err => log($, `turn: ${String(err)}`))
     }
     return r
   })
@@ -1154,7 +1166,7 @@ export const register: Register = on => {
         .filter(Boolean)
         .join(' · ')
       const current = hp.steps[hp.steps.length - 1]
-      const lead = live && hp.stopping ? 'Stopping after its current step' : live ? `Step ${hp.count} · ${current?.live ?? 'Getting started'}` : hp.phase === 'failed' ? 'Stopped before it finished' : ''
+      const lead = live && hp.stopping ? 'Stopping after its current step' : live ? `Step ${hp.count} · ${current?.live ?? 'Getting started'}` : hp.phase === 'failed' ? (WHY[hp.why ?? ''] ?? 'Stopped before it finished') : ''
       // The steps before the live one, a run of the same step shown once with its count.
       const runs: { text: string; n: number }[] = []
       for (const st of live ? hp.steps.slice(0, -1) : []) {

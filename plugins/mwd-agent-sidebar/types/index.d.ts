@@ -37,6 +37,8 @@ export type Helper = {
   hasUsage: boolean
   /** True once the person pressed Stop: its next tool calls are refused until it ends. */
   stopping: boolean
+  /** Why it failed: "stopped" (the Stop button), "aborted", "refusal", "error", "killed" or "failed"; empty otherwise. */
+  why: string
   /** The report it handed back, cut to 4000 characters; empty while it runs or when it gave none. */
   report: string
   /** Position in the sidebar, in start order. */

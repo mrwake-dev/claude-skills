@@ -14,7 +14,7 @@ let specs: { isDeferred?: boolean }[] = []
 
 /** Mocks every $ call the mod makes; `files` stands in for the disk. */
 function rig(on: On, files: Record<string, string>) {
-  const ids = ['agent-a1', 'agent-a2', 'agent-a3']
+  const ids = ['agent-a1', 'agent-a2', 'agent-a3', 'agent-a4']
   const agents: Agent[] = []
   const statuses: (string | undefined)[] = []
   const opened: string[] = []
@@ -370,6 +370,22 @@ for (const surface of ['desktop', 'terminal'] as const) {
     await clock.settle()
     expect(await v.find({ type: 'Text', text: /^Stopped · 1\s*$/ }), 'filed under Stopped').toBeDefined()
     expect(await v.find({ type: 'Text', text: /^Half done\.$/ }), 'with what it had so far').toBeDefined()
+    expect(await v.find({ type: 'Text', text: /^Stopped by you$/ }), 'and why').toBeDefined()
+
+    // Each other way a turn can fail has its own words.
+    await $.turn.complete({ answer: '', agentId: 'agent-a2', reason: 'error', durationMs: 1, isAborted: false, turnId: 't2' } as never)
+    await clock.settle()
+    expect(await v.find({ type: 'Text', text: /^Ended by an API error$/ }), 'an API error').toBeDefined()
+    for (const [n, reason, isAborted, says] of [
+      [3, 'refusal', false, /^The model refused to continue$/],
+      [4, 'aborted', true, /^Interrupted before it finished$/],
+    ] as const) {
+      await $.agent.spawn({ tool_use_id: `s${n}`, prompt: 'x', description: `Job ${n}`, subagentType: 'general-purpose' } as never)
+      await clock.settle()
+      await $.turn.complete({ answer: '', agentId: `agent-a${n}`, reason, durationMs: 1, isAborted, turnId: `t${n}` } as never)
+      await clock.settle()
+      expect(await v.find({ type: 'Text', text: says }), reason).toBeDefined()
+    }
   })
 
   test(`a running card has one activity line that moves with the clock (${surface})`, { timeoutMs: 30000 }, async ($, on) => {
