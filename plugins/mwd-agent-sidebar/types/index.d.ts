@@ -67,8 +67,6 @@ declare module 'claude-code' {
       hidden: boolean
       /** The plan the band draws; null before the first plan. */
       plan: BandPlan | null
-      /** Shimmer tick for the step in progress; it counts only while one is in progress. */
-      shimmer: number
     }
   }
 }

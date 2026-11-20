@@ -13,7 +13,6 @@ const COST = { plugin: 'mwd-agent-sidebar', key: 'cost' } as const
 const OFF = { plugin: 'mwd-agent-sidebar', key: 'off' } as const
 const HIDDEN = { plugin: 'mwd-agent-sidebar', key: 'hidden' } as const
 const PLAN = { plugin: 'mwd-agent-sidebar', key: 'plan' } as const
-const SHIM = { plugin: 'mwd-agent-sidebar', key: 'shimmer' } as const
 
 const TICK_MS = 300
 const POLL_MS = 2000
@@ -452,7 +451,6 @@ async function setOff($: EngineInterface, value: boolean) {
     await $.ui.close({ id: PANE }).catch(() => undefined)
   }
   syncTimers($)
-  syncShimmer($)
 }
 
 const HIDE_KEY = `${NAME}:hidden`
@@ -473,7 +471,6 @@ async function readSwitch($: EngineInterface) {
       hidden = nowHidden
       // The band reads this key, so a change redraws it.
       await $.state.set(HIDDEN, hidden)
-      syncShimmer($)
     }
     await setOff($, json[NAME] === false)
   } catch {
@@ -494,7 +491,6 @@ async function setHidden($: EngineInterface, value: boolean) {
   }
   hidden = value
   await $.state.set(HIDDEN, hidden)
-  syncShimmer($)
   if (value) await $.ui.close({ id: PANE }).catch(() => undefined)
 }
 
@@ -537,7 +533,6 @@ const NUDGE_CONT =
 const NUDGE_STALE =
   'Agent Sidebar: the plan has not changed in a while. If a step finished, call mcp__mwd-agent-sidebar__plan with the full list now.'
 const STATUSES: readonly PlanStatus[] = ['pending', 'in_progress', 'completed']
-const SHIMMER_MS = 350
 // How long a finished plan stays at 100% before the band goes away.
 const DONE_HOLD_MS = 20_000
 const BAR_FALLBACK = 30
@@ -550,9 +545,7 @@ let plan: Plan | null = null
 // True once every step is done; a list with work left in it starts the next plan.
 let planDone = false
 let planShown = false
-let shimmer: { cancel: () => void } | null = null
 let holdTimer: { cancel: () => void } | null = null
-let shimN = 0
 // The plan nudge: main-chat tool calls this turn, and whether a plan came in.
 let turnCalls = 0
 let turnPlanned = false
@@ -606,21 +599,6 @@ async function drawPlan($: EngineInterface) {
     ? { title: plan.title, steps: plan.steps.map(st => ({ text: st.text, status: st.status })), shown: planShown }
     : null
   await $.state.set(PLAN, value)
-  syncShimmer($)
-}
-
-/** The shimmer clock runs only while a shown plan has a step in progress. */
-function syncShimmer($: EngineInterface) {
-  const need = !off && !hidden && planShown && !!plan?.steps.some(st => st.status === 'in_progress')
-  if (need) {
-    shimmer ??= $.clock.every(SHIMMER_MS, () => {
-      shimN += 1
-      void $.state.set(SHIM, shimN).catch(() => undefined)
-    })
-  } else {
-    shimmer?.cancel()
-    shimmer = null
-  }
 }
 
 /** Takes a whole new list, keeps done times, and saves. */
@@ -797,7 +775,7 @@ function barParts(phase: HelperPhase, w: number, tick: number, seat: number): [s
 const FONT = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif"
 const CELL = 3
 
-// Fixed noise, so the sparkles sit still between redraws and only their CSS twinkle moves.
+// Fixed noise, so the sparkles sit still between redraws.
 const noise = (x: number, y: number) => {
   const v = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453
   return v - Math.floor(v)
@@ -814,13 +792,6 @@ const fitPx = (s: string, size: number, max: number) => {
   }
   return `${out}…`
 }
-
-/** Twinkle classes s0 to s3, out of phase; `slow` for a finished bar. */
-const twinkleCss = (slow: boolean) =>
-  `.s0,.s1,.s2,.s3{animation:tw ${slow ? 3.2 : 2.1}s ease-in-out infinite}` +
-  `.s1{animation-duration:${slow ? 3.8 : 2.7}s;animation-delay:-.7s}.s2{animation-duration:${slow ? 4.4 : 1.8}s;animation-delay:-1.3s}` +
-  `.s3{animation-duration:${slow ? 3.5 : 3.1}s;animation-delay:-.4s}` +
-  `@keyframes tw{0%,100%{opacity:.95}50%{opacity:${slow ? 0.55 : 0.15}}}`
 
 /** Dither squares over `w` by `h` pixels: sparse at the left, dense at the right. */
 function sparkles(w: number, h: number, size: number, base: number, rise: number, salt = 0): string {
@@ -866,21 +837,15 @@ function bandSvg(p: BandPlan, W: number): string {
     const x = Math.round((barW * i) / n)
     if (x > fillW + 3) ticks.push(`<rect x="${x}" y="${TRACK_H / 2 - 4}" width="1.5" height="8" rx="0.75"/>`)
   }
-  const finished = n > 0 && done === n
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${BAND_H}" viewBox="0 0 ${W} ${BAND_H}">
 <style>
 .tt{fill:#1f1f1f}.pc{fill:#6b6b6b}.k{fill:#ece9fb}.tk{fill:#c9c2f0}
 @media (prefers-color-scheme: dark){.tt{fill:#ececec}.pc{fill:#a3a3a3}.k{fill:#2a2640}.tk{fill:#4c4470}}
-${twinkleCss(finished)}
-.lv{opacity:.3}
-.sh{animation:sw 2.6s linear infinite}@keyframes sw{from{transform:translateX(-70px)}to{transform:translateX(${fillW + 70}px)}}
-@media (prefers-reduced-motion: reduce){.s0,.s1,.s2,.s3,.sh{animation:none}}
+.s0{opacity:.9}.s1{opacity:.6}.s2{opacity:.35}.s3{opacity:.75}.lv{opacity:.3}
 </style>
 <defs>
 <linearGradient id="hdb-g" x1="0" x2="1"><stop offset="0" stop-color="${P_LIGHT}"/><stop offset=".55" stop-color="${P_MID}"/><stop offset="1" stop-color="${P_DEEP}"/></linearGradient>
-<linearGradient id="hdb-s" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
 <clipPath id="hdb-c"><rect width="${barW}" height="${TRACK_H}" rx="${TRACK_H / 2}"/></clipPath>
-<clipPath id="hdb-f"><rect width="${fillW}" height="${TRACK_H}"/></clipPath>
 </defs>
 <circle cx="5" cy="${BAND_H / 2}" r="4" fill="${P_DEEP}"/>
 <text class="tt" x="14" y="${BAND_H / 2 + 4.5}" font-family="${FONT}" font-size="13" font-weight="600">${xml(title)}</text>
@@ -890,7 +855,6 @@ ${twinkleCss(finished)}
 ${liveW > 0 ? `<rect class="lv" x="${fillW}" width="${liveW}" height="${TRACK_H}" fill="${P_MID}"/>` : ''}
 ${fillW > 0 ? `<rect width="${fillW}" height="${TRACK_H}" fill="url(#hdb-g)"/>` : ''}
 <g fill="#ffffff">${sparkles(fillW, TRACK_H, 1.6, 0.12, 0.4)}</g>
-${fillW > 0 && !finished ? `<g clip-path="url(#hdb-f)"><rect class="sh" width="70" height="${TRACK_H}" fill="url(#hdb-s)"/></g>` : ''}
 <g class="tk">${ticks.join('')}</g>
 </g>
 </g>
@@ -1353,8 +1317,7 @@ export const register: Register = on => {
         </Box>
       )
     } else {
-      // The terminal: dot, title, a gradient of blocks, the step in progress shimmering, count, percent.
-      const { value: tick = 0 } = await $.state.get(SHIM)
+      // The terminal: dot, title, a gradient of blocks, the step in progress in a lighter block, count, percent.
       w = cols || BAR_FALLBACK
       const titleW = Math.max(6, Math.min(28, p.title.length, Math.floor(w / 3)))
       const barW = Math.max(6, w - titleW - label.length - pct.length - 11 - paneLabel.length)
@@ -1375,7 +1338,7 @@ export const register: Register = on => {
                 █
               </Text>
             ))}
-            {liveC ? <Text color={tick % 2 ? P_MID : P_LIGHT}>{'▓'.repeat(liveC)}</Text> : null}
+            {liveC ? <Text color={P_MID}>{'▓'.repeat(liveC)}</Text> : null}
             <Text dimColor>{'░'.repeat(Math.max(0, barW - fillC - liveC))}</Text>
           </Text>
           <Text bold color={P_MID}>{label}</Text>
