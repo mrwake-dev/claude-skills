@@ -521,17 +521,15 @@ for (const surface of ['desktop', 'terminal'] as const) {
       expect(svg, 'count beside the percent, not on the track').toContain('>2/4 · 50%<')
       expect(svg, 'purple gradient').toContain('#6d28d9')
       expect(svg, 'nothing on the bar moves').not.toContain('animation')
-      expect(svg, 'the step in progress is tinted').toContain('class="lv"')
+      expect(svg, 'only the steps done are filled: no tint for the step in progress').not.toContain('class="lv"')
+      expect(svg, 'no dots on the fill').not.toContain('class="s')
     } else {
       expect(nowLine, 'current step under the bar').toBeDefined()
       const cells = await v.findAll({ text: /^█$/ })
       expect(cells, 'half the bar is filled').toHaveLength(22)
       expect(cells[0]!.props.color, 'light purple at the start').toBe('#c4b5fd')
       expect(cells[21]!.props.color, 'deep purple at the head').toBe('#6d28d9')
-      const live1 = String((await v.find({ text: /^▓+$/ }))!.props.color)
-      await clock.advance(360)
-      const live2 = String((await v.find({ text: /^▓+$/ }))!.props.color)
-      expect(live1 === live2, 'the step in progress holds one colour').toBe(true)
+      expect(await v.find({ text: /▓/ }), 'only the steps done are filled: no block for the step in progress').toBeUndefined()
     }
 
     expect((await v.find({ key: 'plan-pane' }))!.props.label, 'no count while none run').toBe('◧')

@@ -891,16 +891,9 @@ function barParts(phase: HelperPhase, w: number, tick: number, seat: number): [s
   return ['░'.repeat(from), '█'.repeat(Math.max(0, to - from)), '░'.repeat(w - Math.max(from, to))]
 }
 
-// ---------- Sparkle bars: SVG for the desktop ----------
+// ---------- Bars: SVG for the desktop ----------
 
 const FONT = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif"
-const CELL = 3
-
-// Fixed noise, so the sparkles sit still between redraws.
-const noise = (x: number, y: number) => {
-  const v = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453
-  return v - Math.floor(v)
-}
 const xml = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c)
 // A rough width of system UI text, enough to place the bar after the title.
 const textPx = (s: string, size: number) => [...s].reduce((n, ch) => n + (/[\s.,:;'|!il1()[\]]/.test(ch) ? 0.3 : /[A-Zmw@%]/.test(ch) ? 0.72 : 0.56) * size, 0)
@@ -914,22 +907,6 @@ const fitPx = (s: string, size: number, max: number) => {
   return `${out}…`
 }
 
-/** Dither squares over `w` by `h` pixels: sparse at the left, dense at the right. */
-function sparkles(w: number, h: number, size: number, base: number, rise: number, salt = 0): string {
-  const cols = Math.floor(w / CELL)
-  const rows = Math.max(1, Math.floor(h / CELL))
-  const out: string[] = []
-  for (let c = 0; c < cols; c++) {
-    const density = base + rise * Math.pow(c / Math.max(1, cols), 1.3)
-    for (let r = 0; r < rows; r++) {
-      if (noise(c + salt, r) < density) {
-        out.push(`<rect class="s${Math.floor(noise(r, c + salt) * 4)}" x="${c * CELL + 0.5}" y="${r * CELL + (h - rows * CELL) / 2 + 0.5}" width="${size}" height="${size}"/>`)
-      }
-    }
-  }
-  return out.join('')
-}
-
 /** A colour between `a` and `b`, both #rrggbb; `t` from 0 to 1. */
 function mix(a: string, b: string, t: number): string {
   const at = (h: string, i: number) => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16)
@@ -939,7 +916,7 @@ function mix(a: string, b: string, t: number): string {
 const BAND_H = 24
 const TRACK_H = 14
 
-/** The task bar above the prompt, one drawing: dot, title, purple gradient track, ticks, count and percent. */
+/** The task bar above the prompt, one drawing: dot, title, purple gradient track, count and percent. */
 function bandSvg(p: BandPlan, W: number): string {
   const n = p.steps.length
   const done = doneCount(p.steps)
@@ -950,19 +927,10 @@ function bandSvg(p: BandPlan, W: number): string {
   const barW = Math.max(60, W - barX - Math.round(textPx(percent, 12.5) + 14))
   const y0 = (BAND_H - TRACK_H) / 2
   const fillW = Math.round(barW * ratio)
-  // The step in progress is a steady soft tint from the fill to that step's end.
-  const live = p.steps.some(st => st.status === 'in_progress')
-  const liveW = live ? Math.round((barW * Math.min(n, done + 1)) / n) - fillW : 0
-  const ticks: string[] = []
-  for (let i = 1; i < n; i++) {
-    const x = Math.round((barW * i) / n)
-    if (x > fillW + 3) ticks.push(`<rect x="${x}" y="${TRACK_H / 2 - 4}" width="1.5" height="8" rx="0.75"/>`)
-  }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${BAND_H}" viewBox="0 0 ${W} ${BAND_H}">
 <style>
-.tt{fill:#1f1f1f}.pc{fill:#6b6b6b}.k{fill:#ece9fb}.tk{fill:#c9c2f0}
-@media (prefers-color-scheme: dark){.tt{fill:#ececec}.pc{fill:#a3a3a3}.k{fill:#2a2640}.tk{fill:#4c4470}}
-.s0{opacity:.9}.s1{opacity:.6}.s2{opacity:.35}.s3{opacity:.75}.lv{opacity:.3}
+.tt{fill:#1f1f1f}.pc{fill:#6b6b6b}.k{fill:#ece9fb}
+@media (prefers-color-scheme: dark){.tt{fill:#ececec}.pc{fill:#a3a3a3}.k{fill:#2a2640}}
 </style>
 <defs>
 <linearGradient id="hdb-g" x1="0" x2="1"><stop offset="0" stop-color="${P_LIGHT}"/><stop offset=".55" stop-color="${P_MID}"/><stop offset="1" stop-color="${P_DEEP}"/></linearGradient>
@@ -973,10 +941,7 @@ function bandSvg(p: BandPlan, W: number): string {
 <g transform="translate(${barX},${y0})">
 <rect class="k" width="${barW}" height="${TRACK_H}" rx="${TRACK_H / 2}"/>
 <g clip-path="url(#hdb-c)">
-${liveW > 0 ? `<rect class="lv" x="${fillW}" width="${liveW}" height="${TRACK_H}" fill="${P_MID}"/>` : ''}
 ${fillW > 0 ? `<rect width="${fillW}" height="${TRACK_H}" fill="url(#hdb-g)"/>` : ''}
-<g fill="#ffffff">${sparkles(fillW, TRACK_H, 1.6, 0.12, 0.4)}</g>
-<g class="tk">${ticks.join('')}</g>
 </g>
 </g>
 <text class="pc" x="${W - 4}" y="${BAND_H / 2 + 4.5}" text-anchor="end" font-family="${FONT}" font-size="12.5" font-variant-numeric="tabular-nums">${percent}</text>
@@ -1482,12 +1447,11 @@ export const register: Register = on => {
         </Box>
       )
     } else {
-      // The terminal: dot, title, a gradient of blocks, the step in progress in a lighter block, count, percent.
+      // The terminal: dot, title, a gradient of blocks for the steps done, count, percent.
       w = cols || BAR_FALLBACK
       const titleW = Math.max(6, Math.min(28, title.length, Math.floor(w / 3)))
       const barW = Math.max(6, w - titleW - label.length - pct.length - 11 - paneLabel.length)
       const fillC = Math.round((barW * done) / n)
-      const liveC = now ? Math.max(0, Math.round((barW * Math.min(n, done + 1)) / n) - fillC) : 0
       const cells = Array.from({ length: fillC }, (_, i) => mix(P_LIGHT, P_DEEP, fillC > 1 ? i / (fillC - 1) : 1))
       row = (
         <Box key="plan-row" flexDirection="row" gap={1} width={w}>
@@ -1503,8 +1467,7 @@ export const register: Register = on => {
                 █
               </Text>
             ))}
-            {liveC ? <Text color={P_MID}>{'▓'.repeat(liveC)}</Text> : null}
-            <Text dimColor>{'░'.repeat(Math.max(0, barW - fillC - liveC))}</Text>
+            <Text dimColor>{'░'.repeat(Math.max(0, barW - fillC))}</Text>
           </Text>
           <Text bold color={P_MID}>{label}</Text>
           <Text dimColor>{pct}</Text>
