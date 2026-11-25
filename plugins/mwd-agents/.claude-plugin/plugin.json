@@ -4,7 +4,8 @@
   "version": "2.1.0",
   "description": "General agents: codebase explorer, code simplifier, diff verifier, plan critic, planner, dead-code cleaner and test-gap finder",
   "author": {
-    "name": "MrWakeCZ"
+    "name": "MrWake",
+    "url": "https://mrwake.dev"
   },
   "homepage": "https://github.com/mrwake-dev/claude-skills#readme",
   "repository": "https://github.com/mrwake-dev/claude-skills",

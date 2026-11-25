@@ -4,7 +4,8 @@
   "version": "2.1.0",
   "description": "Merge request chores: resolve review comments, write the description, rebase onto the target branch",
   "author": {
-    "name": "MrWakeCZ"
+    "name": "MrWake",
+    "url": "https://mrwake.dev"
   },
   "homepage": "https://github.com/mrwake-dev/claude-skills#readme",
   "repository": "https://github.com/mrwake-dev/claude-skills",

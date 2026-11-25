@@ -4,7 +4,8 @@
   "version": "2.1.0",
   "description": "Interactive code review for GitLab merge requests and GitHub pull requests, with an optional private report page",
   "author": {
-    "name": "MrWakeCZ"
+    "name": "MrWake",
+    "url": "https://mrwake.dev"
   },
   "homepage": "https://github.com/mrwake-dev/claude-skills#readme",
   "repository": "https://github.com/mrwake-dev/claude-skills",
