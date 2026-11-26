@@ -1,7 +1,7 @@
 {
   "name": "mwd-cloudflare",
   "displayName": "MrWake Cloudflare",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Prepare a website for Cloudflare Workers and run the first deploy",
   "author": {
     "name": "MrWake",

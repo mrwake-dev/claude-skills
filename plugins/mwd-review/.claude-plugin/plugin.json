@@ -1,7 +1,7 @@
 {
   "name": "mwd-review",
   "displayName": "MrWake Review",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Interactive code review for GitLab merge requests and GitHub pull requests, with an optional private report page",
   "author": {
     "name": "MrWake",

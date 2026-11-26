@@ -1,7 +1,7 @@
 {
   "name": "mwd-agents",
   "displayName": "MrWake Agents",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "General agents: codebase explorer, code simplifier, diff verifier, plan critic, planner, dead-code cleaner and test-gap finder",
   "author": {
     "name": "MrWake",

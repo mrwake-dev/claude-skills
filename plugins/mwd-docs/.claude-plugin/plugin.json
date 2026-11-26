@@ -1,7 +1,7 @@
 {
   "name": "mwd-docs",
   "displayName": "MrWake Docs",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Shorten JSDoc comments and check Markdown grammar and readability",
   "author": {
     "name": "MrWake",
