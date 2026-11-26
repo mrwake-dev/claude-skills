@@ -2,7 +2,6 @@
 name: resolve-mr-comments
 description: Read every review comment on a GitLab merge request or GitHub pull request (via glab or gh, auto-detected from the repo URL), verify each one against the current code, and apply the valid ones as fixes in the working tree — confirming the plan with the user first. Never commits, stages, pushes, or writes back to the platform. Use when the user asks to resolve, address, or apply MR/PR review comments in code.
 argument-hint: "[merge-request-or-pull-request-url]"
-disable-model-invocation: true
 ---
 
 # Resolve MR / PR Review Comments in Code

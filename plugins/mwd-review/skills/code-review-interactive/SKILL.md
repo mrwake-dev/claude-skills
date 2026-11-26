@@ -2,7 +2,6 @@
 name: code-review-interactive
 description: Interactive code review on a GitLab merge request or GitHub pull request — generate feedback, confirm with the user which findings to post, and post approved ones as inline diff comments via glab or gh (auto-detected from the repo URL). Pass `local` instead of a URL to review the current branch from the local checkout with no platform access and nothing posted. Pass `build` to back the review with the repo's own compiler and linter, and `artifact` to also publish the whole review as a private claude.ai page. Use when the user asks to interactively review an MR/PR and post comments, or to review their working branch locally.
 argument-hint: "[merge-request-or-pull-request-url|local] [build] [max=n] [artifact] [bg=preset|#hex]"
-disable-model-invocation: true
 ---
 
 # Interactive Code Review for GitLab MRs & GitHub PRs

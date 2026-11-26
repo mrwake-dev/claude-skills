@@ -1,7 +1,6 @@
 ---
 name: shorter-jsdocs
 description: Audit the JSDoc comments added or modified on the current branch — flag bloated blocks to shorten and unnecessary ones to remove, then apply after confirmation. Use when the user asks to shorten, trim, clean up, or review JSDoc / doc comments on a branch.
-disable-model-invocation: true
 argument-hint: "[--committed | --uncommitted] [path...]"
 allowed-tools: Read, Edit, Glob, Grep, Bash
 ---

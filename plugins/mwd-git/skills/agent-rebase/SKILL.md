@@ -2,7 +2,6 @@
 name: agent-rebase
 description: Rebase a feature branch onto a selected target branch (the latest main or master on the branch's remote by default), resolving mechanical conflicts automatically and regenerating lockfiles when needed, then verifying the result with the project's own build. Force-pushing and pipeline-watching are opt-in via --push and --ci. Use when a branch is behind its base branch, has merge conflicts, or needs a rebase before review/merge.
 argument-hint: "[target-branch] [--push] [--ci]"
-disable-model-invocation: true
 allowed-tools: Read, Edit, Write, Glob, Grep, Bash, AskUserQuestion
 model: opus
 ---

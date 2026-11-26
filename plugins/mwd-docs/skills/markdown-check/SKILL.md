@@ -1,7 +1,6 @@
 ---
 name: markdown-check
 description: Check and validate Markdown content for proper formatting, structure, grammar and spelling. Use when the user asks to validate or review Markdown content.
-disable-model-invocation: true
 argument-hint: <path/to/markdown.md> [language]
 allowed-tools: Read, Glob, Grep
 ---
